@@ -1,2937 +1,686 @@
-(() => {
-  // node_modules/marked/lib/marked.esm.js
-  function getDefaults() {
-    return {
-      baseUrl: null,
-      breaks: false,
-      extensions: null,
-      gfm: true,
-      headerIds: true,
-      headerPrefix: "",
-      highlight: null,
-      langPrefix: "language-",
-      mangle: true,
-      pedantic: false,
-      renderer: null,
-      sanitize: false,
-      sanitizer: null,
-      silent: false,
-      smartLists: false,
-      smartypants: false,
-      tokenizer: null,
-      walkTokens: null,
-      xhtml: false
-    };
-  }
-  var defaults = getDefaults();
-  function changeDefaults(newDefaults) {
-    defaults = newDefaults;
-  }
-  var escapeTest = /[&<>"']/;
-  var escapeReplace = /[&<>"']/g;
-  var escapeTestNoEncode = /[<>"']|&(?!#?\w+;)/;
-  var escapeReplaceNoEncode = /[<>"']|&(?!#?\w+;)/g;
-  var escapeReplacements = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  };
-  var getEscapeReplacement = (ch) => escapeReplacements[ch];
-  function escape(html, encode) {
-    if (encode) {
-      if (escapeTest.test(html)) {
-        return html.replace(escapeReplace, getEscapeReplacement);
-      }
-    } else {
-      if (escapeTestNoEncode.test(html)) {
-        return html.replace(escapeReplaceNoEncode, getEscapeReplacement);
-      }
-    }
-    return html;
-  }
-  var unescapeTest = /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig;
-  function unescape(html) {
-    return html.replace(unescapeTest, (_, n) => {
-      n = n.toLowerCase();
-      if (n === "colon")
-        return ":";
-      if (n.charAt(0) === "#") {
-        return n.charAt(1) === "x" ? String.fromCharCode(parseInt(n.substring(2), 16)) : String.fromCharCode(+n.substring(1));
-      }
-      return "";
-    });
-  }
-  var caret = /(^|[^\[])\^/g;
-  function edit(regex, opt) {
-    regex = regex.source || regex;
-    opt = opt || "";
-    const obj = {
-      replace: (name, val) => {
-        val = val.source || val;
-        val = val.replace(caret, "$1");
-        regex = regex.replace(name, val);
-        return obj;
-      },
-      getRegex: () => {
-        return new RegExp(regex, opt);
-      }
-    };
-    return obj;
-  }
-  var nonWordAndColonTest = /[^\w:]/g;
-  var originIndependentUrl = /^$|^[a-z][a-z0-9+.-]*:|^[?#]/i;
-  function cleanUrl(sanitize, base, href) {
-    if (sanitize) {
-      let prot;
-      try {
-        prot = decodeURIComponent(unescape(href)).replace(nonWordAndColonTest, "").toLowerCase();
-      } catch (e) {
-        return null;
-      }
-      if (prot.indexOf("javascript:") === 0 || prot.indexOf("vbscript:") === 0 || prot.indexOf("data:") === 0) {
-        return null;
-      }
-    }
-    if (base && !originIndependentUrl.test(href)) {
-      href = resolveUrl(base, href);
-    }
-    try {
-      href = encodeURI(href).replace(/%25/g, "%");
-    } catch (e) {
-      return null;
-    }
-    return href;
-  }
-  var baseUrls = {};
-  var justDomain = /^[^:]+:\/*[^/]*$/;
-  var protocol = /^([^:]+:)[\s\S]*$/;
-  var domain = /^([^:]+:\/*[^/]*)[\s\S]*$/;
-  function resolveUrl(base, href) {
-    if (!baseUrls[" " + base]) {
-      if (justDomain.test(base)) {
-        baseUrls[" " + base] = base + "/";
-      } else {
-        baseUrls[" " + base] = rtrim(base, "/", true);
-      }
-    }
-    base = baseUrls[" " + base];
-    const relativeBase = base.indexOf(":") === -1;
-    if (href.substring(0, 2) === "//") {
-      if (relativeBase) {
-        return href;
-      }
-      return base.replace(protocol, "$1") + href;
-    } else if (href.charAt(0) === "/") {
-      if (relativeBase) {
-        return href;
-      }
-      return base.replace(domain, "$1") + href;
-    } else {
-      return base + href;
-    }
-  }
-  var noopTest = { exec: function noopTest2() {
-  } };
-  function merge(obj) {
-    let i = 1, target, key;
-    for (; i < arguments.length; i++) {
-      target = arguments[i];
-      for (key in target) {
-        if (Object.prototype.hasOwnProperty.call(target, key)) {
-          obj[key] = target[key];
-        }
-      }
-    }
-    return obj;
-  }
-  function splitCells(tableRow, count) {
-    const row = tableRow.replace(/\|/g, (match, offset, str) => {
-      let escaped = false, curr = offset;
-      while (--curr >= 0 && str[curr] === "\\")
-        escaped = !escaped;
-      if (escaped) {
-        return "|";
-      } else {
-        return " |";
-      }
-    }), cells = row.split(/ \|/);
-    let i = 0;
-    if (!cells[0].trim()) {
-      cells.shift();
-    }
-    if (cells.length > 0 && !cells[cells.length - 1].trim()) {
-      cells.pop();
-    }
-    if (cells.length > count) {
-      cells.splice(count);
-    } else {
-      while (cells.length < count)
-        cells.push("");
-    }
-    for (; i < cells.length; i++) {
-      cells[i] = cells[i].trim().replace(/\\\|/g, "|");
-    }
-    return cells;
-  }
-  function rtrim(str, c, invert) {
-    const l = str.length;
-    if (l === 0) {
-      return "";
-    }
-    let suffLen = 0;
-    while (suffLen < l) {
-      const currChar = str.charAt(l - suffLen - 1);
-      if (currChar === c && !invert) {
-        suffLen++;
-      } else if (currChar !== c && invert) {
-        suffLen++;
-      } else {
-        break;
-      }
-    }
-    return str.substr(0, l - suffLen);
-  }
-  function findClosingBracket(str, b) {
-    if (str.indexOf(b[1]) === -1) {
-      return -1;
-    }
-    const l = str.length;
-    let level = 0, i = 0;
-    for (; i < l; i++) {
-      if (str[i] === "\\") {
-        i++;
-      } else if (str[i] === b[0]) {
-        level++;
-      } else if (str[i] === b[1]) {
-        level--;
-        if (level < 0) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
-  function checkSanitizeDeprecation(opt) {
-    if (opt && opt.sanitize && !opt.silent) {
-      console.warn("marked(): sanitize and sanitizer parameters are deprecated since version 0.7.0, should not be used and will be removed in the future. Read more here: https://marked.js.org/#/USING_ADVANCED.md#options");
-    }
-  }
-  function repeatString(pattern, count) {
-    if (count < 1) {
-      return "";
-    }
-    let result = "";
-    while (count > 1) {
-      if (count & 1) {
-        result += pattern;
-      }
-      count >>= 1;
-      pattern += pattern;
-    }
-    return result + pattern;
-  }
-  function outputLink(cap, link, raw, lexer2) {
-    const href = link.href;
-    const title = link.title ? escape(link.title) : null;
-    const text2 = cap[1].replace(/\\([\[\]])/g, "$1");
-    if (cap[0].charAt(0) !== "!") {
-      lexer2.state.inLink = true;
-      const token = {
-        type: "link",
-        raw,
-        href,
-        title,
-        text: text2,
-        tokens: lexer2.inlineTokens(text2, [])
-      };
-      lexer2.state.inLink = false;
-      return token;
-    } else {
-      return {
-        type: "image",
-        raw,
-        href,
-        title,
-        text: escape(text2)
-      };
-    }
-  }
-  function indentCodeCompensation(raw, text2) {
-    const matchIndentToCode = raw.match(/^(\s+)(?:```)/);
-    if (matchIndentToCode === null) {
-      return text2;
-    }
-    const indentToCode = matchIndentToCode[1];
-    return text2.split("\n").map((node) => {
-      const matchIndentInNode = node.match(/^\s+/);
-      if (matchIndentInNode === null) {
-        return node;
-      }
-      const [indentInNode] = matchIndentInNode;
-      if (indentInNode.length >= indentToCode.length) {
-        return node.slice(indentToCode.length);
-      }
-      return node;
-    }).join("\n");
-  }
-  var Tokenizer = class {
-    constructor(options2) {
-      this.options = options2 || defaults;
-    }
-    space(src) {
-      const cap = this.rules.block.newline.exec(src);
-      if (cap && cap[0].length > 0) {
-        return {
-          type: "space",
-          raw: cap[0]
-        };
-      }
-    }
-    code(src) {
-      const cap = this.rules.block.code.exec(src);
-      if (cap) {
-        const text2 = cap[0].replace(/^ {1,4}/gm, "");
-        return {
-          type: "code",
-          raw: cap[0],
-          codeBlockStyle: "indented",
-          text: !this.options.pedantic ? rtrim(text2, "\n") : text2
-        };
-      }
-    }
-    fences(src) {
-      const cap = this.rules.block.fences.exec(src);
-      if (cap) {
-        const raw = cap[0];
-        const text2 = indentCodeCompensation(raw, cap[3] || "");
-        return {
-          type: "code",
-          raw,
-          lang: cap[2] ? cap[2].trim() : cap[2],
-          text: text2
-        };
-      }
-    }
-    heading(src) {
-      const cap = this.rules.block.heading.exec(src);
-      if (cap) {
-        let text2 = cap[2].trim();
-        if (/#$/.test(text2)) {
-          const trimmed = rtrim(text2, "#");
-          if (this.options.pedantic) {
-            text2 = trimmed.trim();
-          } else if (!trimmed || / $/.test(trimmed)) {
-            text2 = trimmed.trim();
-          }
-        }
-        const token = {
-          type: "heading",
-          raw: cap[0],
-          depth: cap[1].length,
-          text: text2,
-          tokens: []
-        };
-        this.lexer.inline(token.text, token.tokens);
-        return token;
-      }
-    }
-    hr(src) {
-      const cap = this.rules.block.hr.exec(src);
-      if (cap) {
-        return {
-          type: "hr",
-          raw: cap[0]
-        };
-      }
-    }
-    blockquote(src) {
-      const cap = this.rules.block.blockquote.exec(src);
-      if (cap) {
-        const text2 = cap[0].replace(/^ *> ?/gm, "");
-        return {
-          type: "blockquote",
-          raw: cap[0],
-          tokens: this.lexer.blockTokens(text2, []),
-          text: text2
-        };
-      }
-    }
-    list(src) {
-      let cap = this.rules.block.list.exec(src);
-      if (cap) {
-        let raw, istask, ischecked, indent, i, blankLine, endsWithBlankLine, line, nextLine, rawLine, itemContents, endEarly;
-        let bull = cap[1].trim();
-        const isordered = bull.length > 1;
-        const list = {
-          type: "list",
-          raw: "",
-          ordered: isordered,
-          start: isordered ? +bull.slice(0, -1) : "",
-          loose: false,
-          items: []
-        };
-        bull = isordered ? `\\d{1,9}\\${bull.slice(-1)}` : `\\${bull}`;
-        if (this.options.pedantic) {
-          bull = isordered ? bull : "[*+-]";
-        }
-        const itemRegex = new RegExp(`^( {0,3}${bull})((?: [^\\n]*)?(?:\\n|$))`);
-        while (src) {
-          endEarly = false;
-          if (!(cap = itemRegex.exec(src))) {
-            break;
-          }
-          if (this.rules.block.hr.test(src)) {
-            break;
-          }
-          raw = cap[0];
-          src = src.substring(raw.length);
-          line = cap[2].split("\n", 1)[0];
-          nextLine = src.split("\n", 1)[0];
-          if (this.options.pedantic) {
-            indent = 2;
-            itemContents = line.trimLeft();
-          } else {
-            indent = cap[2].search(/[^ ]/);
-            indent = indent > 4 ? 1 : indent;
-            itemContents = line.slice(indent);
-            indent += cap[1].length;
-          }
-          blankLine = false;
-          if (!line && /^ *$/.test(nextLine)) {
-            raw += nextLine + "\n";
-            src = src.substring(nextLine.length + 1);
-            endEarly = true;
-          }
-          if (!endEarly) {
-            const nextBulletRegex = new RegExp(`^ {0,${Math.min(3, indent - 1)}}(?:[*+-]|\\d{1,9}[.)])`);
-            while (src) {
-              rawLine = src.split("\n", 1)[0];
-              line = rawLine;
-              if (this.options.pedantic) {
-                line = line.replace(/^ {1,4}(?=( {4})*[^ ])/g, "  ");
-              }
-              if (nextBulletRegex.test(line)) {
-                break;
-              }
-              if (line.search(/[^ ]/) >= indent || !line.trim()) {
-                itemContents += "\n" + line.slice(indent);
-              } else if (!blankLine) {
-                itemContents += "\n" + line;
-              } else {
-                break;
-              }
-              if (!blankLine && !line.trim()) {
-                blankLine = true;
-              }
-              raw += rawLine + "\n";
-              src = src.substring(rawLine.length + 1);
-            }
-          }
-          if (!list.loose) {
-            if (endsWithBlankLine) {
-              list.loose = true;
-            } else if (/\n *\n *$/.test(raw)) {
-              endsWithBlankLine = true;
-            }
-          }
-          if (this.options.gfm) {
-            istask = /^\[[ xX]\] /.exec(itemContents);
-            if (istask) {
-              ischecked = istask[0] !== "[ ] ";
-              itemContents = itemContents.replace(/^\[[ xX]\] +/, "");
-            }
-          }
-          list.items.push({
-            type: "list_item",
-            raw,
-            task: !!istask,
-            checked: ischecked,
-            loose: false,
-            text: itemContents
-          });
-          list.raw += raw;
-        }
-        list.items[list.items.length - 1].raw = raw.trimRight();
-        list.items[list.items.length - 1].text = itemContents.trimRight();
-        list.raw = list.raw.trimRight();
-        const l = list.items.length;
-        for (i = 0; i < l; i++) {
-          this.lexer.state.top = false;
-          list.items[i].tokens = this.lexer.blockTokens(list.items[i].text, []);
-          const spacers = list.items[i].tokens.filter((t) => t.type === "space");
-          const hasMultipleLineBreaks = spacers.every((t) => {
-            const chars = t.raw.split("");
-            let lineBreaks = 0;
-            for (const char of chars) {
-              if (char === "\n") {
-                lineBreaks += 1;
-              }
-              if (lineBreaks > 1) {
-                return true;
-              }
-            }
-            return false;
-          });
-          if (!list.loose && spacers.length && hasMultipleLineBreaks) {
-            list.loose = true;
-            list.items[i].loose = true;
-          }
-        }
-        return list;
-      }
-    }
-    html(src) {
-      const cap = this.rules.block.html.exec(src);
-      if (cap) {
-        const token = {
-          type: "html",
-          raw: cap[0],
-          pre: !this.options.sanitizer && (cap[1] === "pre" || cap[1] === "script" || cap[1] === "style"),
-          text: cap[0]
-        };
-        if (this.options.sanitize) {
-          token.type = "paragraph";
-          token.text = this.options.sanitizer ? this.options.sanitizer(cap[0]) : escape(cap[0]);
-          token.tokens = [];
-          this.lexer.inline(token.text, token.tokens);
-        }
-        return token;
-      }
-    }
-    def(src) {
-      const cap = this.rules.block.def.exec(src);
-      if (cap) {
-        if (cap[3])
-          cap[3] = cap[3].substring(1, cap[3].length - 1);
-        const tag = cap[1].toLowerCase().replace(/\s+/g, " ");
-        return {
-          type: "def",
-          tag,
-          raw: cap[0],
-          href: cap[2],
-          title: cap[3]
-        };
-      }
-    }
-    table(src) {
-      const cap = this.rules.block.table.exec(src);
-      if (cap) {
-        const item = {
-          type: "table",
-          header: splitCells(cap[1]).map((c) => {
-            return { text: c };
-          }),
-          align: cap[2].replace(/^ *|\| *$/g, "").split(/ *\| */),
-          rows: cap[3] && cap[3].trim() ? cap[3].replace(/\n[ \t]*$/, "").split("\n") : []
-        };
-        if (item.header.length === item.align.length) {
-          item.raw = cap[0];
-          let l = item.align.length;
-          let i, j, k, row;
-          for (i = 0; i < l; i++) {
-            if (/^ *-+: *$/.test(item.align[i])) {
-              item.align[i] = "right";
-            } else if (/^ *:-+: *$/.test(item.align[i])) {
-              item.align[i] = "center";
-            } else if (/^ *:-+ *$/.test(item.align[i])) {
-              item.align[i] = "left";
-            } else {
-              item.align[i] = null;
-            }
-          }
-          l = item.rows.length;
-          for (i = 0; i < l; i++) {
-            item.rows[i] = splitCells(item.rows[i], item.header.length).map((c) => {
-              return { text: c };
-            });
-          }
-          l = item.header.length;
-          for (j = 0; j < l; j++) {
-            item.header[j].tokens = [];
-            this.lexer.inlineTokens(item.header[j].text, item.header[j].tokens);
-          }
-          l = item.rows.length;
-          for (j = 0; j < l; j++) {
-            row = item.rows[j];
-            for (k = 0; k < row.length; k++) {
-              row[k].tokens = [];
-              this.lexer.inlineTokens(row[k].text, row[k].tokens);
-            }
-          }
-          return item;
-        }
-      }
-    }
-    lheading(src) {
-      const cap = this.rules.block.lheading.exec(src);
-      if (cap) {
-        const token = {
-          type: "heading",
-          raw: cap[0],
-          depth: cap[2].charAt(0) === "=" ? 1 : 2,
-          text: cap[1],
-          tokens: []
-        };
-        this.lexer.inline(token.text, token.tokens);
-        return token;
-      }
-    }
-    paragraph(src) {
-      const cap = this.rules.block.paragraph.exec(src);
-      if (cap) {
-        const token = {
-          type: "paragraph",
-          raw: cap[0],
-          text: cap[1].charAt(cap[1].length - 1) === "\n" ? cap[1].slice(0, -1) : cap[1],
-          tokens: []
-        };
-        this.lexer.inline(token.text, token.tokens);
-        return token;
-      }
-    }
-    text(src) {
-      const cap = this.rules.block.text.exec(src);
-      if (cap) {
-        const token = {
-          type: "text",
-          raw: cap[0],
-          text: cap[0],
-          tokens: []
-        };
-        this.lexer.inline(token.text, token.tokens);
-        return token;
-      }
-    }
-    escape(src) {
-      const cap = this.rules.inline.escape.exec(src);
-      if (cap) {
-        return {
-          type: "escape",
-          raw: cap[0],
-          text: escape(cap[1])
-        };
-      }
-    }
-    tag(src) {
-      const cap = this.rules.inline.tag.exec(src);
-      if (cap) {
-        if (!this.lexer.state.inLink && /^<a /i.test(cap[0])) {
-          this.lexer.state.inLink = true;
-        } else if (this.lexer.state.inLink && /^<\/a>/i.test(cap[0])) {
-          this.lexer.state.inLink = false;
-        }
-        if (!this.lexer.state.inRawBlock && /^<(pre|code|kbd|script)(\s|>)/i.test(cap[0])) {
-          this.lexer.state.inRawBlock = true;
-        } else if (this.lexer.state.inRawBlock && /^<\/(pre|code|kbd|script)(\s|>)/i.test(cap[0])) {
-          this.lexer.state.inRawBlock = false;
-        }
-        return {
-          type: this.options.sanitize ? "text" : "html",
-          raw: cap[0],
-          inLink: this.lexer.state.inLink,
-          inRawBlock: this.lexer.state.inRawBlock,
-          text: this.options.sanitize ? this.options.sanitizer ? this.options.sanitizer(cap[0]) : escape(cap[0]) : cap[0]
-        };
-      }
-    }
-    link(src) {
-      const cap = this.rules.inline.link.exec(src);
-      if (cap) {
-        const trimmedUrl = cap[2].trim();
-        if (!this.options.pedantic && /^</.test(trimmedUrl)) {
-          if (!/>$/.test(trimmedUrl)) {
-            return;
-          }
-          const rtrimSlash = rtrim(trimmedUrl.slice(0, -1), "\\");
-          if ((trimmedUrl.length - rtrimSlash.length) % 2 === 0) {
-            return;
-          }
-        } else {
-          const lastParenIndex = findClosingBracket(cap[2], "()");
-          if (lastParenIndex > -1) {
-            const start = cap[0].indexOf("!") === 0 ? 5 : 4;
-            const linkLen = start + cap[1].length + lastParenIndex;
-            cap[2] = cap[2].substring(0, lastParenIndex);
-            cap[0] = cap[0].substring(0, linkLen).trim();
-            cap[3] = "";
-          }
-        }
-        let href = cap[2];
-        let title = "";
-        if (this.options.pedantic) {
-          const link = /^([^'"]*[^\s])\s+(['"])(.*)\2/.exec(href);
-          if (link) {
-            href = link[1];
-            title = link[3];
-          }
-        } else {
-          title = cap[3] ? cap[3].slice(1, -1) : "";
-        }
-        href = href.trim();
-        if (/^</.test(href)) {
-          if (this.options.pedantic && !/>$/.test(trimmedUrl)) {
-            href = href.slice(1);
-          } else {
-            href = href.slice(1, -1);
-          }
-        }
-        return outputLink(cap, {
-          href: href ? href.replace(this.rules.inline._escapes, "$1") : href,
-          title: title ? title.replace(this.rules.inline._escapes, "$1") : title
-        }, cap[0], this.lexer);
-      }
-    }
-    reflink(src, links) {
-      let cap;
-      if ((cap = this.rules.inline.reflink.exec(src)) || (cap = this.rules.inline.nolink.exec(src))) {
-        let link = (cap[2] || cap[1]).replace(/\s+/g, " ");
-        link = links[link.toLowerCase()];
-        if (!link || !link.href) {
-          const text2 = cap[0].charAt(0);
-          return {
-            type: "text",
-            raw: text2,
-            text: text2
-          };
-        }
-        return outputLink(cap, link, cap[0], this.lexer);
-      }
-    }
-    emStrong(src, maskedSrc, prevChar = "") {
-      let match = this.rules.inline.emStrong.lDelim.exec(src);
-      if (!match)
-        return;
-      if (match[3] && prevChar.match(/[\p{L}\p{N}]/u))
-        return;
-      const nextChar = match[1] || match[2] || "";
-      if (!nextChar || nextChar && (prevChar === "" || this.rules.inline.punctuation.exec(prevChar))) {
-        const lLength = match[0].length - 1;
-        let rDelim, rLength, delimTotal = lLength, midDelimTotal = 0;
-        const endReg = match[0][0] === "*" ? this.rules.inline.emStrong.rDelimAst : this.rules.inline.emStrong.rDelimUnd;
-        endReg.lastIndex = 0;
-        maskedSrc = maskedSrc.slice(-1 * src.length + lLength);
-        while ((match = endReg.exec(maskedSrc)) != null) {
-          rDelim = match[1] || match[2] || match[3] || match[4] || match[5] || match[6];
-          if (!rDelim)
-            continue;
-          rLength = rDelim.length;
-          if (match[3] || match[4]) {
-            delimTotal += rLength;
-            continue;
-          } else if (match[5] || match[6]) {
-            if (lLength % 3 && !((lLength + rLength) % 3)) {
-              midDelimTotal += rLength;
-              continue;
-            }
-          }
-          delimTotal -= rLength;
-          if (delimTotal > 0)
-            continue;
-          rLength = Math.min(rLength, rLength + delimTotal + midDelimTotal);
-          if (Math.min(lLength, rLength) % 2) {
-            const text3 = src.slice(1, lLength + match.index + rLength);
-            return {
-              type: "em",
-              raw: src.slice(0, lLength + match.index + rLength + 1),
-              text: text3,
-              tokens: this.lexer.inlineTokens(text3, [])
-            };
-          }
-          const text2 = src.slice(2, lLength + match.index + rLength - 1);
-          return {
-            type: "strong",
-            raw: src.slice(0, lLength + match.index + rLength + 1),
-            text: text2,
-            tokens: this.lexer.inlineTokens(text2, [])
-          };
-        }
-      }
-    }
-    codespan(src) {
-      const cap = this.rules.inline.code.exec(src);
-      if (cap) {
-        let text2 = cap[2].replace(/\n/g, " ");
-        const hasNonSpaceChars = /[^ ]/.test(text2);
-        const hasSpaceCharsOnBothEnds = /^ /.test(text2) && / $/.test(text2);
-        if (hasNonSpaceChars && hasSpaceCharsOnBothEnds) {
-          text2 = text2.substring(1, text2.length - 1);
-        }
-        text2 = escape(text2, true);
-        return {
-          type: "codespan",
-          raw: cap[0],
-          text: text2
-        };
-      }
-    }
-    br(src) {
-      const cap = this.rules.inline.br.exec(src);
-      if (cap) {
-        return {
-          type: "br",
-          raw: cap[0]
-        };
-      }
-    }
-    del(src) {
-      const cap = this.rules.inline.del.exec(src);
-      if (cap) {
-        return {
-          type: "del",
-          raw: cap[0],
-          text: cap[2],
-          tokens: this.lexer.inlineTokens(cap[2], [])
-        };
-      }
-    }
-    autolink(src, mangle2) {
-      const cap = this.rules.inline.autolink.exec(src);
-      if (cap) {
-        let text2, href;
-        if (cap[2] === "@") {
-          text2 = escape(this.options.mangle ? mangle2(cap[1]) : cap[1]);
-          href = "mailto:" + text2;
-        } else {
-          text2 = escape(cap[1]);
-          href = text2;
-        }
-        return {
-          type: "link",
-          raw: cap[0],
-          text: text2,
-          href,
-          tokens: [
-            {
-              type: "text",
-              raw: text2,
-              text: text2
-            }
-          ]
-        };
-      }
-    }
-    url(src, mangle2) {
-      let cap;
-      if (cap = this.rules.inline.url.exec(src)) {
-        let text2, href;
-        if (cap[2] === "@") {
-          text2 = escape(this.options.mangle ? mangle2(cap[0]) : cap[0]);
-          href = "mailto:" + text2;
-        } else {
-          let prevCapZero;
-          do {
-            prevCapZero = cap[0];
-            cap[0] = this.rules.inline._backpedal.exec(cap[0])[0];
-          } while (prevCapZero !== cap[0]);
-          text2 = escape(cap[0]);
-          if (cap[1] === "www.") {
-            href = "http://" + text2;
-          } else {
-            href = text2;
-          }
-        }
-        return {
-          type: "link",
-          raw: cap[0],
-          text: text2,
-          href,
-          tokens: [
-            {
-              type: "text",
-              raw: text2,
-              text: text2
-            }
-          ]
-        };
-      }
-    }
-    inlineText(src, smartypants2) {
-      const cap = this.rules.inline.text.exec(src);
-      if (cap) {
-        let text2;
-        if (this.lexer.state.inRawBlock) {
-          text2 = this.options.sanitize ? this.options.sanitizer ? this.options.sanitizer(cap[0]) : escape(cap[0]) : cap[0];
-        } else {
-          text2 = escape(this.options.smartypants ? smartypants2(cap[0]) : cap[0]);
-        }
-        return {
-          type: "text",
-          raw: cap[0],
-          text: text2
-        };
-      }
-    }
-  };
-  var block = {
-    newline: /^(?: *(?:\n|$))+/,
-    code: /^( {4}[^\n]+(?:\n(?: *(?:\n|$))*)?)+/,
-    fences: /^ {0,3}(`{3,}(?=[^`\n]*\n)|~{3,})([^\n]*)\n(?:|([\s\S]*?)\n)(?: {0,3}\1[~`]* *(?=\n|$)|$)/,
-    hr: /^ {0,3}((?:- *){3,}|(?:_ *){3,}|(?:\* *){3,})(?:\n+|$)/,
-    heading: /^ {0,3}(#{1,6})(?=\s|$)(.*)(?:\n+|$)/,
-    blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/,
-    list: /^( {0,3}bull)( [^\n]+?)?(?:\n|$)/,
-    html: "^ {0,3}(?:<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n+|$)|comment[^\\n]*(\\n+|$)|<\\?[\\s\\S]*?(?:\\?>\\n*|$)|<![A-Z][\\s\\S]*?(?:>\\n*|$)|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>\\n*|$)|</?(tag)(?: +|\\n|/?>)[\\s\\S]*?(?:(?:\\n *)+\\n|$)|<(?!script|pre|style|textarea)([a-z][\\w-]*)(?:attribute)*? */?>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$)|</(?!script|pre|style|textarea)[a-z][\\w-]*\\s*>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$))",
-    def: /^ {0,3}\[(label)\]: *(?:\n *)?<?([^\s>]+)>?(?:(?: +(?:\n *)?| *\n *)(title))? *(?:\n+|$)/,
-    table: noopTest,
-    lheading: /^([^\n]+)\n {0,3}(=+|-+) *(?:\n+|$)/,
-    _paragraph: /^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table| +\n)[^\n]+)*)/,
-    text: /^[^\n]+/
-  };
-  block._label = /(?!\s*\])(?:\\.|[^\[\]\\])+/;
-  block._title = /(?:"(?:\\"?|[^"\\])*"|'[^'\n]*(?:\n[^'\n]+)*\n?'|\([^()]*\))/;
-  block.def = edit(block.def).replace("label", block._label).replace("title", block._title).getRegex();
-  block.bullet = /(?:[*+-]|\d{1,9}[.)])/;
-  block.listItemStart = edit(/^( *)(bull) */).replace("bull", block.bullet).getRegex();
-  block.list = edit(block.list).replace(/bull/g, block.bullet).replace("hr", "\\n+(?=\\1?(?:(?:- *){3,}|(?:_ *){3,}|(?:\\* *){3,})(?:\\n+|$))").replace("def", "\\n+(?=" + block.def.source + ")").getRegex();
-  block._tag = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul";
-  block._comment = /<!--(?!-?>)[\s\S]*?(?:-->|$)/;
-  block.html = edit(block.html, "i").replace("comment", block._comment).replace("tag", block._tag).replace("attribute", / +[a-zA-Z:_][\w.:-]*(?: *= *"[^"\n]*"| *= *'[^'\n]*'| *= *[^\s"'=<>`]+)?/).getRegex();
-  block.paragraph = edit(block._paragraph).replace("hr", block.hr).replace("heading", " {0,3}#{1,6} ").replace("|lheading", "").replace("|table", "").replace("blockquote", " {0,3}>").replace("fences", " {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list", " {0,3}(?:[*+-]|1[.)]) ").replace("html", "</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag", block._tag).getRegex();
-  block.blockquote = edit(block.blockquote).replace("paragraph", block.paragraph).getRegex();
-  block.normal = merge({}, block);
-  block.gfm = merge({}, block.normal, {
-    table: "^ *([^\\n ].*\\|.*)\\n {0,3}(?:\\| *)?(:?-+:? *(?:\\| *:?-+:? *)*)(?:\\| *)?(?:\\n((?:(?! *\\n|hr|heading|blockquote|code|fences|list|html).*(?:\\n|$))*)\\n*|$)"
-  });
-  block.gfm.table = edit(block.gfm.table).replace("hr", block.hr).replace("heading", " {0,3}#{1,6} ").replace("blockquote", " {0,3}>").replace("code", " {4}[^\\n]").replace("fences", " {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list", " {0,3}(?:[*+-]|1[.)]) ").replace("html", "</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag", block._tag).getRegex();
-  block.gfm.paragraph = edit(block._paragraph).replace("hr", block.hr).replace("heading", " {0,3}#{1,6} ").replace("|lheading", "").replace("table", block.gfm.table).replace("blockquote", " {0,3}>").replace("fences", " {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list", " {0,3}(?:[*+-]|1[.)]) ").replace("html", "</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag", block._tag).getRegex();
-  block.pedantic = merge({}, block.normal, {
-    html: edit(`^ *(?:comment *(?:\\n|\\s*$)|<(tag)[\\s\\S]+?</\\1> *(?:\\n{2,}|\\s*$)|<tag(?:"[^"]*"|'[^']*'|\\s[^'"/>\\s]*)*?/?> *(?:\\n{2,}|\\s*$))`).replace("comment", block._comment).replace(/tag/g, "(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\\b)\\w+(?!:|[^\\w\\s@]*@)\\b").getRegex(),
-    def: /^ *\[([^\]]+)\]: *<?([^\s>]+)>?(?: +(["(][^\n]+[")]))? *(?:\n+|$)/,
-    heading: /^(#{1,6})(.*)(?:\n+|$)/,
-    fences: noopTest,
-    paragraph: edit(block.normal._paragraph).replace("hr", block.hr).replace("heading", " *#{1,6} *[^\n]").replace("lheading", block.lheading).replace("blockquote", " {0,3}>").replace("|fences", "").replace("|list", "").replace("|html", "").getRegex()
-  });
-  var inline = {
-    escape: /^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/,
-    autolink: /^<(scheme:[^\s\x00-\x1f<>]*|email)>/,
-    url: noopTest,
-    tag: "^comment|^</[a-zA-Z][\\w:-]*\\s*>|^<[a-zA-Z][\\w-]*(?:attribute)*?\\s*/?>|^<\\?[\\s\\S]*?\\?>|^<![a-zA-Z]+\\s[\\s\\S]*?>|^<!\\[CDATA\\[[\\s\\S]*?\\]\\]>",
-    link: /^!?\[(label)\]\(\s*(href)(?:\s+(title))?\s*\)/,
-    reflink: /^!?\[(label)\]\[(ref)\]/,
-    nolink: /^!?\[(ref)\](?:\[\])?/,
-    reflinkSearch: "reflink|nolink(?!\\()",
-    emStrong: {
-      lDelim: /^(?:\*+(?:([punct_])|[^\s*]))|^_+(?:([punct*])|([^\s_]))/,
-      rDelimAst: /^[^_*]*?\_\_[^_*]*?\*[^_*]*?(?=\_\_)|[punct_](\*+)(?=[\s]|$)|[^punct*_\s](\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|[^punct*_\s](\*+)(?=[^punct*_\s])/,
-      rDelimUnd: /^[^_*]*?\*\*[^_*]*?\_[^_*]*?(?=\*\*)|[punct*](\_+)(?=[\s]|$)|[^punct*_\s](\_+)(?=[punct*\s]|$)|[punct*\s](\_+)(?=[^punct*_\s])|[\s](\_+)(?=[punct*])|[punct*](\_+)(?=[punct*])/
-    },
-    code: /^(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/,
-    br: /^( {2,}|\\)\n(?!\s*$)/,
-    del: noopTest,
-    text: /^(`+|[^`])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<!\[`*_]|\b_|$)|[^ ](?= {2,}\n)))/,
-    punctuation: /^([\spunctuation])/
-  };
-  inline._punctuation = "!\"#$%&'()+\\-.,/:;<=>?@\\[\\]`^{|}~";
-  inline.punctuation = edit(inline.punctuation).replace(/punctuation/g, inline._punctuation).getRegex();
-  inline.blockSkip = /\[[^\]]*?\]\([^\)]*?\)|`[^`]*?`|<[^>]*?>/g;
-  inline.escapedEmSt = /\\\*|\\_/g;
-  inline._comment = edit(block._comment).replace("(?:-->|$)", "-->").getRegex();
-  inline.emStrong.lDelim = edit(inline.emStrong.lDelim).replace(/punct/g, inline._punctuation).getRegex();
-  inline.emStrong.rDelimAst = edit(inline.emStrong.rDelimAst, "g").replace(/punct/g, inline._punctuation).getRegex();
-  inline.emStrong.rDelimUnd = edit(inline.emStrong.rDelimUnd, "g").replace(/punct/g, inline._punctuation).getRegex();
-  inline._escapes = /\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/g;
-  inline._scheme = /[a-zA-Z][a-zA-Z0-9+.-]{1,31}/;
-  inline._email = /[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+(@)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?![-_])/;
-  inline.autolink = edit(inline.autolink).replace("scheme", inline._scheme).replace("email", inline._email).getRegex();
-  inline._attribute = /\s+[a-zA-Z:_][\w.:-]*(?:\s*=\s*"[^"]*"|\s*=\s*'[^']*'|\s*=\s*[^\s"'=<>`]+)?/;
-  inline.tag = edit(inline.tag).replace("comment", inline._comment).replace("attribute", inline._attribute).getRegex();
-  inline._label = /(?:\[(?:\\.|[^\[\]\\])*\]|\\.|`[^`]*`|[^\[\]\\`])*?/;
-  inline._href = /<(?:\\.|[^\n<>\\])+>|[^\s\x00-\x1f]*/;
-  inline._title = /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/;
-  inline.link = edit(inline.link).replace("label", inline._label).replace("href", inline._href).replace("title", inline._title).getRegex();
-  inline.reflink = edit(inline.reflink).replace("label", inline._label).replace("ref", block._label).getRegex();
-  inline.nolink = edit(inline.nolink).replace("ref", block._label).getRegex();
-  inline.reflinkSearch = edit(inline.reflinkSearch, "g").replace("reflink", inline.reflink).replace("nolink", inline.nolink).getRegex();
-  inline.normal = merge({}, inline);
-  inline.pedantic = merge({}, inline.normal, {
-    strong: {
-      start: /^__|\*\*/,
-      middle: /^__(?=\S)([\s\S]*?\S)__(?!_)|^\*\*(?=\S)([\s\S]*?\S)\*\*(?!\*)/,
-      endAst: /\*\*(?!\*)/g,
-      endUnd: /__(?!_)/g
-    },
-    em: {
-      start: /^_|\*/,
-      middle: /^()\*(?=\S)([\s\S]*?\S)\*(?!\*)|^_(?=\S)([\s\S]*?\S)_(?!_)/,
-      endAst: /\*(?!\*)/g,
-      endUnd: /_(?!_)/g
-    },
-    link: edit(/^!?\[(label)\]\((.*?)\)/).replace("label", inline._label).getRegex(),
-    reflink: edit(/^!?\[(label)\]\s*\[([^\]]*)\]/).replace("label", inline._label).getRegex()
-  });
-  inline.gfm = merge({}, inline.normal, {
-    escape: edit(inline.escape).replace("])", "~|])").getRegex(),
-    _extended_email: /[A-Za-z0-9._+-]+(@)[a-zA-Z0-9-_]+(?:\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![-_])/,
-    url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/,
-    _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/,
-    del: /^(~~?)(?=[^\s~])([\s\S]*?[^\s~])\1(?=[^~]|$)/,
-    text: /^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/
-  });
-  inline.gfm.url = edit(inline.gfm.url, "i").replace("email", inline.gfm._extended_email).getRegex();
-  inline.breaks = merge({}, inline.gfm, {
-    br: edit(inline.br).replace("{2,}", "*").getRegex(),
-    text: edit(inline.gfm.text).replace("\\b_", "\\b_| {2,}\\n").replace(/\{2,\}/g, "*").getRegex()
-  });
-  function smartypants(text2) {
-    return text2.replace(/---/g, "\u2014").replace(/--/g, "\u2013").replace(/(^|[-\u2014/(\[{"\s])'/g, "$1\u2018").replace(/'/g, "\u2019").replace(/(^|[-\u2014/(\[{\u2018\s])"/g, "$1\u201C").replace(/"/g, "\u201D").replace(/\.{3}/g, "\u2026");
-  }
-  function mangle(text2) {
-    let out = "", i, ch;
-    const l = text2.length;
-    for (i = 0; i < l; i++) {
-      ch = text2.charCodeAt(i);
-      if (Math.random() > 0.5) {
-        ch = "x" + ch.toString(16);
-      }
-      out += "&#" + ch + ";";
-    }
-    return out;
-  }
-  var Lexer = class {
-    constructor(options2) {
-      this.tokens = [];
-      this.tokens.links = /* @__PURE__ */ Object.create(null);
-      this.options = options2 || defaults;
-      this.options.tokenizer = this.options.tokenizer || new Tokenizer();
-      this.tokenizer = this.options.tokenizer;
-      this.tokenizer.options = this.options;
-      this.tokenizer.lexer = this;
-      this.inlineQueue = [];
-      this.state = {
-        inLink: false,
-        inRawBlock: false,
-        top: true
-      };
-      const rules = {
-        block: block.normal,
-        inline: inline.normal
-      };
-      if (this.options.pedantic) {
-        rules.block = block.pedantic;
-        rules.inline = inline.pedantic;
-      } else if (this.options.gfm) {
-        rules.block = block.gfm;
-        if (this.options.breaks) {
-          rules.inline = inline.breaks;
-        } else {
-          rules.inline = inline.gfm;
-        }
-      }
-      this.tokenizer.rules = rules;
-    }
-    static get rules() {
-      return {
-        block,
-        inline
-      };
-    }
-    static lex(src, options2) {
-      const lexer2 = new Lexer(options2);
-      return lexer2.lex(src);
-    }
-    static lexInline(src, options2) {
-      const lexer2 = new Lexer(options2);
-      return lexer2.inlineTokens(src);
-    }
-    lex(src) {
-      src = src.replace(/\r\n|\r/g, "\n").replace(/\t/g, "    ");
-      this.blockTokens(src, this.tokens);
-      let next;
-      while (next = this.inlineQueue.shift()) {
-        this.inlineTokens(next.src, next.tokens);
-      }
-      return this.tokens;
-    }
-    blockTokens(src, tokens = []) {
-      if (this.options.pedantic) {
-        src = src.replace(/^ +$/gm, "");
-      }
-      let token, lastToken, cutSrc, lastParagraphClipped;
-      while (src) {
-        if (this.options.extensions && this.options.extensions.block && this.options.extensions.block.some((extTokenizer) => {
-          if (token = extTokenizer.call({ lexer: this }, src, tokens)) {
-            src = src.substring(token.raw.length);
-            tokens.push(token);
-            return true;
-          }
-          return false;
-        })) {
-          continue;
-        }
-        if (token = this.tokenizer.space(src)) {
-          src = src.substring(token.raw.length);
-          if (token.raw.length === 1 && tokens.length > 0) {
-            tokens[tokens.length - 1].raw += "\n";
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (token = this.tokenizer.code(src)) {
-          src = src.substring(token.raw.length);
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && (lastToken.type === "paragraph" || lastToken.type === "text")) {
-            lastToken.raw += "\n" + token.raw;
-            lastToken.text += "\n" + token.text;
-            this.inlineQueue[this.inlineQueue.length - 1].src = lastToken.text;
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (token = this.tokenizer.fences(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.heading(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.hr(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.blockquote(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.list(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.html(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.def(src)) {
-          src = src.substring(token.raw.length);
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && (lastToken.type === "paragraph" || lastToken.type === "text")) {
-            lastToken.raw += "\n" + token.raw;
-            lastToken.text += "\n" + token.raw;
-            this.inlineQueue[this.inlineQueue.length - 1].src = lastToken.text;
-          } else if (!this.tokens.links[token.tag]) {
-            this.tokens.links[token.tag] = {
-              href: token.href,
-              title: token.title
-            };
-          }
-          continue;
-        }
-        if (token = this.tokenizer.table(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.lheading(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        cutSrc = src;
-        if (this.options.extensions && this.options.extensions.startBlock) {
-          let startIndex = Infinity;
-          const tempSrc = src.slice(1);
-          let tempStart;
-          this.options.extensions.startBlock.forEach(function(getStartIndex) {
-            tempStart = getStartIndex.call({ lexer: this }, tempSrc);
-            if (typeof tempStart === "number" && tempStart >= 0) {
-              startIndex = Math.min(startIndex, tempStart);
-            }
-          });
-          if (startIndex < Infinity && startIndex >= 0) {
-            cutSrc = src.substring(0, startIndex + 1);
-          }
-        }
-        if (this.state.top && (token = this.tokenizer.paragraph(cutSrc))) {
-          lastToken = tokens[tokens.length - 1];
-          if (lastParagraphClipped && lastToken.type === "paragraph") {
-            lastToken.raw += "\n" + token.raw;
-            lastToken.text += "\n" + token.text;
-            this.inlineQueue.pop();
-            this.inlineQueue[this.inlineQueue.length - 1].src = lastToken.text;
-          } else {
-            tokens.push(token);
-          }
-          lastParagraphClipped = cutSrc.length !== src.length;
-          src = src.substring(token.raw.length);
-          continue;
-        }
-        if (token = this.tokenizer.text(src)) {
-          src = src.substring(token.raw.length);
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && lastToken.type === "text") {
-            lastToken.raw += "\n" + token.raw;
-            lastToken.text += "\n" + token.text;
-            this.inlineQueue.pop();
-            this.inlineQueue[this.inlineQueue.length - 1].src = lastToken.text;
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (src) {
-          const errMsg = "Infinite loop on byte: " + src.charCodeAt(0);
-          if (this.options.silent) {
-            console.error(errMsg);
-            break;
-          } else {
-            throw new Error(errMsg);
-          }
-        }
-      }
-      this.state.top = true;
-      return tokens;
-    }
-    inline(src, tokens) {
-      this.inlineQueue.push({ src, tokens });
-    }
-    inlineTokens(src, tokens = []) {
-      let token, lastToken, cutSrc;
-      let maskedSrc = src;
-      let match;
-      let keepPrevChar, prevChar;
-      if (this.tokens.links) {
-        const links = Object.keys(this.tokens.links);
-        if (links.length > 0) {
-          while ((match = this.tokenizer.rules.inline.reflinkSearch.exec(maskedSrc)) != null) {
-            if (links.includes(match[0].slice(match[0].lastIndexOf("[") + 1, -1))) {
-              maskedSrc = maskedSrc.slice(0, match.index) + "[" + repeatString("a", match[0].length - 2) + "]" + maskedSrc.slice(this.tokenizer.rules.inline.reflinkSearch.lastIndex);
-            }
-          }
-        }
-      }
-      while ((match = this.tokenizer.rules.inline.blockSkip.exec(maskedSrc)) != null) {
-        maskedSrc = maskedSrc.slice(0, match.index) + "[" + repeatString("a", match[0].length - 2) + "]" + maskedSrc.slice(this.tokenizer.rules.inline.blockSkip.lastIndex);
-      }
-      while ((match = this.tokenizer.rules.inline.escapedEmSt.exec(maskedSrc)) != null) {
-        maskedSrc = maskedSrc.slice(0, match.index) + "++" + maskedSrc.slice(this.tokenizer.rules.inline.escapedEmSt.lastIndex);
-      }
-      while (src) {
-        if (!keepPrevChar) {
-          prevChar = "";
-        }
-        keepPrevChar = false;
-        if (this.options.extensions && this.options.extensions.inline && this.options.extensions.inline.some((extTokenizer) => {
-          if (token = extTokenizer.call({ lexer: this }, src, tokens)) {
-            src = src.substring(token.raw.length);
-            tokens.push(token);
-            return true;
-          }
-          return false;
-        })) {
-          continue;
-        }
-        if (token = this.tokenizer.escape(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.tag(src)) {
-          src = src.substring(token.raw.length);
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && token.type === "text" && lastToken.type === "text") {
-            lastToken.raw += token.raw;
-            lastToken.text += token.text;
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (token = this.tokenizer.link(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.reflink(src, this.tokens.links)) {
-          src = src.substring(token.raw.length);
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && token.type === "text" && lastToken.type === "text") {
-            lastToken.raw += token.raw;
-            lastToken.text += token.text;
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (token = this.tokenizer.emStrong(src, maskedSrc, prevChar)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.codespan(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.br(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.del(src)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (token = this.tokenizer.autolink(src, mangle)) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        if (!this.state.inLink && (token = this.tokenizer.url(src, mangle))) {
-          src = src.substring(token.raw.length);
-          tokens.push(token);
-          continue;
-        }
-        cutSrc = src;
-        if (this.options.extensions && this.options.extensions.startInline) {
-          let startIndex = Infinity;
-          const tempSrc = src.slice(1);
-          let tempStart;
-          this.options.extensions.startInline.forEach(function(getStartIndex) {
-            tempStart = getStartIndex.call({ lexer: this }, tempSrc);
-            if (typeof tempStart === "number" && tempStart >= 0) {
-              startIndex = Math.min(startIndex, tempStart);
-            }
-          });
-          if (startIndex < Infinity && startIndex >= 0) {
-            cutSrc = src.substring(0, startIndex + 1);
-          }
-        }
-        if (token = this.tokenizer.inlineText(cutSrc, smartypants)) {
-          src = src.substring(token.raw.length);
-          if (token.raw.slice(-1) !== "_") {
-            prevChar = token.raw.slice(-1);
-          }
-          keepPrevChar = true;
-          lastToken = tokens[tokens.length - 1];
-          if (lastToken && lastToken.type === "text") {
-            lastToken.raw += token.raw;
-            lastToken.text += token.text;
-          } else {
-            tokens.push(token);
-          }
-          continue;
-        }
-        if (src) {
-          const errMsg = "Infinite loop on byte: " + src.charCodeAt(0);
-          if (this.options.silent) {
-            console.error(errMsg);
-            break;
-          } else {
-            throw new Error(errMsg);
-          }
-        }
-      }
-      return tokens;
-    }
-  };
-  var Renderer = class {
-    constructor(options2) {
-      this.options = options2 || defaults;
-    }
-    code(code, infostring, escaped) {
-      const lang = (infostring || "").match(/\S*/)[0];
-      if (this.options.highlight) {
-        const out = this.options.highlight(code, lang);
-        if (out != null && out !== code) {
-          escaped = true;
-          code = out;
-        }
-      }
-      code = code.replace(/\n$/, "") + "\n";
-      if (!lang) {
-        return "<pre><code>" + (escaped ? code : escape(code, true)) + "</code></pre>\n";
-      }
-      return '<pre><code class="' + this.options.langPrefix + escape(lang, true) + '">' + (escaped ? code : escape(code, true)) + "</code></pre>\n";
-    }
-    blockquote(quote) {
-      return "<blockquote>\n" + quote + "</blockquote>\n";
-    }
-    html(html) {
-      return html;
-    }
-    heading(text2, level, raw, slugger) {
-      if (this.options.headerIds) {
-        return "<h" + level + ' id="' + this.options.headerPrefix + slugger.slug(raw) + '">' + text2 + "</h" + level + ">\n";
-      }
-      return "<h" + level + ">" + text2 + "</h" + level + ">\n";
-    }
-    hr() {
-      return this.options.xhtml ? "<hr/>\n" : "<hr>\n";
-    }
-    list(body, ordered, start) {
-      const type = ordered ? "ol" : "ul", startatt = ordered && start !== 1 ? ' start="' + start + '"' : "";
-      return "<" + type + startatt + ">\n" + body + "</" + type + ">\n";
-    }
-    listitem(text2) {
-      return "<li>" + text2 + "</li>\n";
-    }
-    checkbox(checked) {
-      return "<input " + (checked ? 'checked="" ' : "") + 'disabled="" type="checkbox"' + (this.options.xhtml ? " /" : "") + "> ";
-    }
-    paragraph(text2) {
-      return "<p>" + text2 + "</p>\n";
-    }
-    table(header, body) {
-      if (body)
-        body = "<tbody>" + body + "</tbody>";
-      return "<table>\n<thead>\n" + header + "</thead>\n" + body + "</table>\n";
-    }
-    tablerow(content) {
-      return "<tr>\n" + content + "</tr>\n";
-    }
-    tablecell(content, flags) {
-      const type = flags.header ? "th" : "td";
-      const tag = flags.align ? "<" + type + ' align="' + flags.align + '">' : "<" + type + ">";
-      return tag + content + "</" + type + ">\n";
-    }
-    strong(text2) {
-      return "<strong>" + text2 + "</strong>";
-    }
-    em(text2) {
-      return "<em>" + text2 + "</em>";
-    }
-    codespan(text2) {
-      return "<code>" + text2 + "</code>";
-    }
-    br() {
-      return this.options.xhtml ? "<br/>" : "<br>";
-    }
-    del(text2) {
-      return "<del>" + text2 + "</del>";
-    }
-    link(href, title, text2) {
-      href = cleanUrl(this.options.sanitize, this.options.baseUrl, href);
-      if (href === null) {
-        return text2;
-      }
-      let out = '<a href="' + escape(href) + '"';
-      if (title) {
-        out += ' title="' + title + '"';
-      }
-      out += ">" + text2 + "</a>";
-      return out;
-    }
-    image(href, title, text2) {
-      href = cleanUrl(this.options.sanitize, this.options.baseUrl, href);
-      if (href === null) {
-        return text2;
-      }
-      let out = '<img src="' + href + '" alt="' + text2 + '"';
-      if (title) {
-        out += ' title="' + title + '"';
-      }
-      out += this.options.xhtml ? "/>" : ">";
-      return out;
-    }
-    text(text2) {
-      return text2;
-    }
-  };
-  var TextRenderer = class {
-    strong(text2) {
-      return text2;
-    }
-    em(text2) {
-      return text2;
-    }
-    codespan(text2) {
-      return text2;
-    }
-    del(text2) {
-      return text2;
-    }
-    html(text2) {
-      return text2;
-    }
-    text(text2) {
-      return text2;
-    }
-    link(href, title, text2) {
-      return "" + text2;
-    }
-    image(href, title, text2) {
-      return "" + text2;
-    }
-    br() {
-      return "";
-    }
-  };
-  var Slugger = class {
-    constructor() {
-      this.seen = {};
-    }
-    serialize(value) {
-      return value.toLowerCase().trim().replace(/<[!\/a-z].*?>/ig, "").replace(/[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, "").replace(/\s/g, "-");
-    }
-    getNextSafeSlug(originalSlug, isDryRun) {
-      let slug = originalSlug;
-      let occurenceAccumulator = 0;
-      if (this.seen.hasOwnProperty(slug)) {
-        occurenceAccumulator = this.seen[originalSlug];
-        do {
-          occurenceAccumulator++;
-          slug = originalSlug + "-" + occurenceAccumulator;
-        } while (this.seen.hasOwnProperty(slug));
-      }
-      if (!isDryRun) {
-        this.seen[originalSlug] = occurenceAccumulator;
-        this.seen[slug] = 0;
-      }
-      return slug;
-    }
-    slug(value, options2 = {}) {
-      const slug = this.serialize(value);
-      return this.getNextSafeSlug(slug, options2.dryrun);
-    }
-  };
-  var Parser = class {
-    constructor(options2) {
-      this.options = options2 || defaults;
-      this.options.renderer = this.options.renderer || new Renderer();
-      this.renderer = this.options.renderer;
-      this.renderer.options = this.options;
-      this.textRenderer = new TextRenderer();
-      this.slugger = new Slugger();
-    }
-    static parse(tokens, options2) {
-      const parser2 = new Parser(options2);
-      return parser2.parse(tokens);
-    }
-    static parseInline(tokens, options2) {
-      const parser2 = new Parser(options2);
-      return parser2.parseInline(tokens);
-    }
-    parse(tokens, top = true) {
-      let out = "", i, j, k, l2, l3, row, cell, header, body, token, ordered, start, loose, itemBody, item, checked, task, checkbox, ret;
-      const l = tokens.length;
-      for (i = 0; i < l; i++) {
-        token = tokens[i];
-        if (this.options.extensions && this.options.extensions.renderers && this.options.extensions.renderers[token.type]) {
-          ret = this.options.extensions.renderers[token.type].call({ parser: this }, token);
-          if (ret !== false || !["space", "hr", "heading", "code", "table", "blockquote", "list", "html", "paragraph", "text"].includes(token.type)) {
-            out += ret || "";
-            continue;
-          }
-        }
-        switch (token.type) {
-          case "space": {
-            continue;
-          }
-          case "hr": {
-            out += this.renderer.hr();
-            continue;
-          }
-          case "heading": {
-            out += this.renderer.heading(this.parseInline(token.tokens), token.depth, unescape(this.parseInline(token.tokens, this.textRenderer)), this.slugger);
-            continue;
-          }
-          case "code": {
-            out += this.renderer.code(token.text, token.lang, token.escaped);
-            continue;
-          }
-          case "table": {
-            header = "";
-            cell = "";
-            l2 = token.header.length;
-            for (j = 0; j < l2; j++) {
-              cell += this.renderer.tablecell(this.parseInline(token.header[j].tokens), { header: true, align: token.align[j] });
-            }
-            header += this.renderer.tablerow(cell);
-            body = "";
-            l2 = token.rows.length;
-            for (j = 0; j < l2; j++) {
-              row = token.rows[j];
-              cell = "";
-              l3 = row.length;
-              for (k = 0; k < l3; k++) {
-                cell += this.renderer.tablecell(this.parseInline(row[k].tokens), { header: false, align: token.align[k] });
-              }
-              body += this.renderer.tablerow(cell);
-            }
-            out += this.renderer.table(header, body);
-            continue;
-          }
-          case "blockquote": {
-            body = this.parse(token.tokens);
-            out += this.renderer.blockquote(body);
-            continue;
-          }
-          case "list": {
-            ordered = token.ordered;
-            start = token.start;
-            loose = token.loose;
-            l2 = token.items.length;
-            body = "";
-            for (j = 0; j < l2; j++) {
-              item = token.items[j];
-              checked = item.checked;
-              task = item.task;
-              itemBody = "";
-              if (item.task) {
-                checkbox = this.renderer.checkbox(checked);
-                if (loose) {
-                  if (item.tokens.length > 0 && item.tokens[0].type === "paragraph") {
-                    item.tokens[0].text = checkbox + " " + item.tokens[0].text;
-                    if (item.tokens[0].tokens && item.tokens[0].tokens.length > 0 && item.tokens[0].tokens[0].type === "text") {
-                      item.tokens[0].tokens[0].text = checkbox + " " + item.tokens[0].tokens[0].text;
-                    }
-                  } else {
-                    item.tokens.unshift({
-                      type: "text",
-                      text: checkbox
-                    });
-                  }
-                } else {
-                  itemBody += checkbox;
-                }
-              }
-              itemBody += this.parse(item.tokens, loose);
-              body += this.renderer.listitem(itemBody, task, checked);
-            }
-            out += this.renderer.list(body, ordered, start);
-            continue;
-          }
-          case "html": {
-            out += this.renderer.html(token.text);
-            continue;
-          }
-          case "paragraph": {
-            out += this.renderer.paragraph(this.parseInline(token.tokens));
-            continue;
-          }
-          case "text": {
-            body = token.tokens ? this.parseInline(token.tokens) : token.text;
-            while (i + 1 < l && tokens[i + 1].type === "text") {
-              token = tokens[++i];
-              body += "\n" + (token.tokens ? this.parseInline(token.tokens) : token.text);
-            }
-            out += top ? this.renderer.paragraph(body) : body;
-            continue;
-          }
-          default: {
-            const errMsg = 'Token with "' + token.type + '" type was not found.';
-            if (this.options.silent) {
-              console.error(errMsg);
-              return;
-            } else {
-              throw new Error(errMsg);
-            }
-          }
-        }
-      }
-      return out;
-    }
-    parseInline(tokens, renderer) {
-      renderer = renderer || this.renderer;
-      let out = "", i, token, ret;
-      const l = tokens.length;
-      for (i = 0; i < l; i++) {
-        token = tokens[i];
-        if (this.options.extensions && this.options.extensions.renderers && this.options.extensions.renderers[token.type]) {
-          ret = this.options.extensions.renderers[token.type].call({ parser: this }, token);
-          if (ret !== false || !["escape", "html", "link", "image", "strong", "em", "codespan", "br", "del", "text"].includes(token.type)) {
-            out += ret || "";
-            continue;
-          }
-        }
-        switch (token.type) {
-          case "escape": {
-            out += renderer.text(token.text);
-            break;
-          }
-          case "html": {
-            out += renderer.html(token.text);
-            break;
-          }
-          case "link": {
-            out += renderer.link(token.href, token.title, this.parseInline(token.tokens, renderer));
-            break;
-          }
-          case "image": {
-            out += renderer.image(token.href, token.title, token.text);
-            break;
-          }
-          case "strong": {
-            out += renderer.strong(this.parseInline(token.tokens, renderer));
-            break;
-          }
-          case "em": {
-            out += renderer.em(this.parseInline(token.tokens, renderer));
-            break;
-          }
-          case "codespan": {
-            out += renderer.codespan(token.text);
-            break;
-          }
-          case "br": {
-            out += renderer.br();
-            break;
-          }
-          case "del": {
-            out += renderer.del(this.parseInline(token.tokens, renderer));
-            break;
-          }
-          case "text": {
-            out += renderer.text(token.text);
-            break;
-          }
-          default: {
-            const errMsg = 'Token with "' + token.type + '" type was not found.';
-            if (this.options.silent) {
-              console.error(errMsg);
-              return;
-            } else {
-              throw new Error(errMsg);
-            }
-          }
-        }
-      }
-      return out;
-    }
-  };
-  function marked(src, opt, callback) {
-    if (typeof src === "undefined" || src === null) {
-      throw new Error("marked(): input parameter is undefined or null");
-    }
-    if (typeof src !== "string") {
-      throw new Error("marked(): input parameter is of type " + Object.prototype.toString.call(src) + ", string expected");
-    }
-    if (typeof opt === "function") {
-      callback = opt;
-      opt = null;
-    }
-    opt = merge({}, marked.defaults, opt || {});
-    checkSanitizeDeprecation(opt);
-    if (callback) {
-      const highlight = opt.highlight;
-      let tokens;
-      try {
-        tokens = Lexer.lex(src, opt);
-      } catch (e) {
-        return callback(e);
-      }
-      const done = function(err) {
-        let out;
-        if (!err) {
-          try {
-            if (opt.walkTokens) {
-              marked.walkTokens(tokens, opt.walkTokens);
-            }
-            out = Parser.parse(tokens, opt);
-          } catch (e) {
-            err = e;
-          }
-        }
-        opt.highlight = highlight;
-        return err ? callback(err) : callback(null, out);
-      };
-      if (!highlight || highlight.length < 3) {
-        return done();
-      }
-      delete opt.highlight;
-      if (!tokens.length)
-        return done();
-      let pending = 0;
-      marked.walkTokens(tokens, function(token) {
-        if (token.type === "code") {
-          pending++;
-          setTimeout(() => {
-            highlight(token.text, token.lang, function(err, code) {
-              if (err) {
-                return done(err);
-              }
-              if (code != null && code !== token.text) {
-                token.text = code;
-                token.escaped = true;
-              }
-              pending--;
-              if (pending === 0) {
-                done();
-              }
-            });
-          }, 0);
-        }
-      });
-      if (pending === 0) {
-        done();
-      }
-      return;
-    }
-    try {
-      const tokens = Lexer.lex(src, opt);
-      if (opt.walkTokens) {
-        marked.walkTokens(tokens, opt.walkTokens);
-      }
-      return Parser.parse(tokens, opt);
-    } catch (e) {
-      e.message += "\nPlease report this to https://github.com/markedjs/marked.";
-      if (opt.silent) {
-        return "<p>An error occurred:</p><pre>" + escape(e.message + "", true) + "</pre>";
-      }
-      throw e;
-    }
-  }
-  marked.options = marked.setOptions = function(opt) {
-    merge(marked.defaults, opt);
-    changeDefaults(marked.defaults);
-    return marked;
-  };
-  marked.getDefaults = getDefaults;
-  marked.defaults = defaults;
-  marked.use = function(...args) {
-    const opts = merge({}, ...args);
-    const extensions = marked.defaults.extensions || { renderers: {}, childTokens: {} };
-    let hasExtensions;
-    args.forEach((pack) => {
-      if (pack.extensions) {
-        hasExtensions = true;
-        pack.extensions.forEach((ext) => {
-          if (!ext.name) {
-            throw new Error("extension name required");
-          }
-          if (ext.renderer) {
-            const prevRenderer = extensions.renderers ? extensions.renderers[ext.name] : null;
-            if (prevRenderer) {
-              extensions.renderers[ext.name] = function(...args2) {
-                let ret = ext.renderer.apply(this, args2);
-                if (ret === false) {
-                  ret = prevRenderer.apply(this, args2);
-                }
-                return ret;
-              };
-            } else {
-              extensions.renderers[ext.name] = ext.renderer;
-            }
-          }
-          if (ext.tokenizer) {
-            if (!ext.level || ext.level !== "block" && ext.level !== "inline") {
-              throw new Error("extension level must be 'block' or 'inline'");
-            }
-            if (extensions[ext.level]) {
-              extensions[ext.level].unshift(ext.tokenizer);
-            } else {
-              extensions[ext.level] = [ext.tokenizer];
-            }
-            if (ext.start) {
-              if (ext.level === "block") {
-                if (extensions.startBlock) {
-                  extensions.startBlock.push(ext.start);
-                } else {
-                  extensions.startBlock = [ext.start];
-                }
-              } else if (ext.level === "inline") {
-                if (extensions.startInline) {
-                  extensions.startInline.push(ext.start);
-                } else {
-                  extensions.startInline = [ext.start];
-                }
-              }
-            }
-          }
-          if (ext.childTokens) {
-            extensions.childTokens[ext.name] = ext.childTokens;
-          }
-        });
-      }
-      if (pack.renderer) {
-        const renderer = marked.defaults.renderer || new Renderer();
-        for (const prop in pack.renderer) {
-          const prevRenderer = renderer[prop];
-          renderer[prop] = (...args2) => {
-            let ret = pack.renderer[prop].apply(renderer, args2);
-            if (ret === false) {
-              ret = prevRenderer.apply(renderer, args2);
-            }
-            return ret;
-          };
-        }
-        opts.renderer = renderer;
-      }
-      if (pack.tokenizer) {
-        const tokenizer = marked.defaults.tokenizer || new Tokenizer();
-        for (const prop in pack.tokenizer) {
-          const prevTokenizer = tokenizer[prop];
-          tokenizer[prop] = (...args2) => {
-            let ret = pack.tokenizer[prop].apply(tokenizer, args2);
-            if (ret === false) {
-              ret = prevTokenizer.apply(tokenizer, args2);
-            }
-            return ret;
-          };
-        }
-        opts.tokenizer = tokenizer;
-      }
-      if (pack.walkTokens) {
-        const walkTokens2 = marked.defaults.walkTokens;
-        opts.walkTokens = function(token) {
-          pack.walkTokens.call(this, token);
-          if (walkTokens2) {
-            walkTokens2.call(this, token);
-          }
-        };
-      }
-      if (hasExtensions) {
-        opts.extensions = extensions;
-      }
-      marked.setOptions(opts);
-    });
-  };
-  marked.walkTokens = function(tokens, callback) {
-    for (const token of tokens) {
-      callback.call(marked, token);
-      switch (token.type) {
-        case "table": {
-          for (const cell of token.header) {
-            marked.walkTokens(cell.tokens, callback);
-          }
-          for (const row of token.rows) {
-            for (const cell of row) {
-              marked.walkTokens(cell.tokens, callback);
-            }
-          }
-          break;
-        }
-        case "list": {
-          marked.walkTokens(token.items, callback);
-          break;
-        }
-        default: {
-          if (marked.defaults.extensions && marked.defaults.extensions.childTokens && marked.defaults.extensions.childTokens[token.type]) {
-            marked.defaults.extensions.childTokens[token.type].forEach(function(childTokens) {
-              marked.walkTokens(token[childTokens], callback);
-            });
-          } else if (token.tokens) {
-            marked.walkTokens(token.tokens, callback);
-          }
-        }
-      }
-    }
-  };
-  marked.parseInline = function(src, opt) {
-    if (typeof src === "undefined" || src === null) {
-      throw new Error("marked.parseInline(): input parameter is undefined or null");
-    }
-    if (typeof src !== "string") {
-      throw new Error("marked.parseInline(): input parameter is of type " + Object.prototype.toString.call(src) + ", string expected");
-    }
-    opt = merge({}, marked.defaults, opt || {});
-    checkSanitizeDeprecation(opt);
-    try {
-      const tokens = Lexer.lexInline(src, opt);
-      if (opt.walkTokens) {
-        marked.walkTokens(tokens, opt.walkTokens);
-      }
-      return Parser.parseInline(tokens, opt);
-    } catch (e) {
-      e.message += "\nPlease report this to https://github.com/markedjs/marked.";
-      if (opt.silent) {
-        return "<p>An error occurred:</p><pre>" + escape(e.message + "", true) + "</pre>";
-      }
-      throw e;
-    }
-  };
-  marked.Parser = Parser;
-  marked.parser = Parser.parse;
-  marked.Renderer = Renderer;
-  marked.TextRenderer = TextRenderer;
-  marked.Lexer = Lexer;
-  marked.lexer = Lexer.lex;
-  marked.Tokenizer = Tokenizer;
-  marked.Slugger = Slugger;
-  marked.parse = marked;
-  var options = marked.options;
-  var setOptions = marked.setOptions;
-  var use = marked.use;
-  var walkTokens = marked.walkTokens;
-  var parseInline = marked.parseInline;
-  var parser = Parser.parse;
-  var lexer = Lexer.lex;
-
-  // node_modules/dabcom/res/Reactivity.js
-  var Reactivity = class {
-    #onGet = null;
-    #onSet = null;
-    constructor(config) {
-      this.#onGet = config.Getter;
-      this.#onSet = config.Setter;
-    }
-    setReactive(Obj) {
-      if (typeof this.#onGet !== "function") {
-        this.#onGet = () => {
-        };
-      }
-      if (typeof this.#onSet !== "function") {
-        this.#onGet = () => {
-        };
-      }
-      const onGet = this.#onGet;
-      const onSet = this.#onSet;
-      const obj = new Proxy(Obj, {
-        get(object, propertyName) {
-          return onGet(object, propertyName) || object[propertyName];
-        },
-        set(object, propertyName, valueSet) {
-          if (typeof valueSet === "function") {
-            Obj[propertyName] = valueSet(object, propertyName, valueSet) || null;
-          } else {
-            Obj[propertyName] = valueSet;
-          }
-          onSet(object, propertyName, valueSet);
-          return 1;
-        }
-      });
-      return obj;
-    }
-  };
-
-  // node_modules/dabcom/res/dabMainClass.js
-  var Main = class {
-    #allComponentId = {};
-    #kindOfComponentBindingData = {};
-    createRawComponent(name, attribute) {
-      return {
-        name,
-        content: attribute?.content,
-        attribute: attribute?.attribute,
-        parentComponent: attribute?.parentComponent,
-        positionComponent: attribute?.positionComponent,
-        state: attribute?.state || {},
-        event: attribute?.event || {},
-        id: attribute?.id
-      };
-    }
-    createComponent(rawComponent, embedData = {}) {
-      const element = document.createElement(rawComponent.name);
-      if (rawComponent?.attribute instanceof Object) {
-        for (let x in rawComponent?.attribute) {
-          element.setAttribute(x, rawComponent?.attribute[x]);
-        }
-      }
-      const textNode = document.createTextNode(rawComponent?.content);
-      element.appendChild(textNode);
-      return {
-        element,
-        content: textNode,
-        rawContent: rawComponent?.content,
-        parent: rawComponent.parentComponent,
-        position: rawComponent.positionComponent,
-        state: rawComponent?.state,
-        event: rawComponent?.event,
-        ...embedData,
-        destroy(onDestroy = () => {
-        }) {
-          onDestroy();
-          element.remove();
-        },
-        updateTextNode() {
-          const text = this.rawContent;
-          const resultText = eval(text);
-          this.content.replaceData(0, text.length, resultText);
-        },
-        updateAttribute() {
-        }
-      };
-    }
-    renderComponent(StackRawComponent, target, embedData2 = {}) {
-      const StackComponent = [];
-      let State = {};
-      const kindOfComponentBindingData = this.#kindOfComponentBindingData;
-      for (let x of StackRawComponent) {
-        const componentCreated = this.createComponent(x, embedData2);
-        State = { ...State, ...componentCreated.state };
-        if (x?.id) {
-          this.#allComponentId[x?.id] = {
-            ...componentCreated,
-            state: new Reactivity({
-              Getter(object, propertyName) {
-                return object[propertyName];
-              },
-              Setter(object, propertyName, valueSet) {
-                for (let x2 of kindOfComponentBindingData[propertyName]) {
-                  x2.state[propertyName] = valueSet;
-                  x2.updateTextNode();
-                }
-              }
-            }).setReactive(State)
-          };
-        }
-        if (x?.event instanceof Object) {
-          for (let y in x?.event) {
-            componentCreated.element[y] = () => x?.event[y]({
-              state: new Reactivity({
-                Getter(object, propertyName) {
-                  return object[propertyName];
-                },
-                Setter(object, propertyName, valueSet) {
-                  for (let x2 of kindOfComponentBindingData[propertyName]) {
-                    x2.state[propertyName] = valueSet;
-                    x2.updateTextNode();
-                  }
-                }
-              }).setReactive(State)
-            });
-          }
-        }
-        for (let y of Object.keys(componentCreated.state)) {
-          if (kindOfComponentBindingData[y] instanceof Array) {
-            kindOfComponentBindingData[y].push(componentCreated);
-          } else {
-            kindOfComponentBindingData[y] = [];
-            kindOfComponentBindingData[y].push(componentCreated);
-          }
-        }
-        ;
-        StackComponent.push(componentCreated);
-      }
-      const element2 = {};
-      for (let x of StackComponent) {
-        x.updateTextNode();
-        if (!element2[x.position]) {
-          element2[x.position] = x.element;
-          if (element2[x.parent]) {
-            element2[x.parent].appendChild(x.element);
-          }
-        } else {
-          element2[x.position].appendChild(x.element);
-        }
-      }
-      if (target instanceof HTMLElement)
-        target.appendChild(element2[Object.keys(element2)[0]]);
-      return {
-        destroy: StackComponent[0].destroy,
-        component: StackComponent[0],
-        state: new Reactivity({
-          Getter(object, propertyName) {
-            return object[propertyName];
-          },
-          Setter(object, propertyName, valueSet) {
-            for (let x of kindOfComponentBindingData[propertyName]) {
-              x.state[propertyName] = valueSet;
-              x.updateTextNode();
-            }
-          }
-        }).setReactive(State),
-        updateComponentRendered() {
-          for (let x of StackComponent) {
-            x.updateTextNode();
-          }
-        }
-      };
-    }
-    replaceChild(newComponent, oldComponent) {
-      oldComponent.parentElement.replaceChild(newComponent.element, oldComponent);
-    }
-    findById(id) {
-      return this.#allComponentId[id];
-    }
-  };
-
-  // node_modules/dabcom/res/dabMain.js
-  var dabMain = new Main();
-  function findById(id) {
-    return dabMain.findById(id);
-  }
-  function Render(Component, target, embedData2) {
-    return {
-      ...dabMain.renderComponent(Component, target, embedData2),
-      updateComponentProperty(componentFunction, property) {
-        const newComponent = dabMain.renderComponent(componentFunction(property), void 0, embedData2);
-        dabMain.replaceChild(newComponent.component, this.component.element);
-      }
-    };
-  }
-
-  // node_modules/dabcom/spa/route.js
-  var SPA = class {
-    #router = [];
-    #previousComponentRendered = null;
-    constructor() {
-      window.addEventListener("DOMContentLoaded", () => {
-        document.body.onclick = (e) => {
-          if (e.target.matches("[data-link]")) {
-            e.preventDefault();
-            this.navigateTo(e.target.href);
-          }
-        };
-      });
-      window.onpopstate = () => {
-        this.render();
-      };
-    }
-    navigateTo(url) {
-      history.pushState(null, null, url);
-      this.render();
-    }
-    addNewRouter(path, handler) {
-      this.#router.push({
-        path,
-        event: handler,
-        isMatch: false
-      });
-    }
-    matchRoute(path) {
-      return location.pathname === path;
-    }
-    updateRouteHandler() {
-      const match = this.matchRoute;
-      this.#router = this.#router.map((e) => ({
-        path: e.path,
-        event: e.event,
-        isMatch: match(e.path)
-      }));
-    }
-    render() {
-      this.updateRouteHandler();
-      let routeHandler = this.#router.find((e) => e.isMatch);
-      if (!routeHandler) {
-        routeHandler = {
-          path: location.pathname,
-          event: () => {
-            console.log("page not found");
-          },
-          isMatch: true
-        };
-      }
-      if (this.#previousComponentRendered instanceof Object) {
-        this.#previousComponentRendered.destroy();
-        this.#previousComponentRendered = routeHandler.event();
-      } else {
-        this.#previousComponentRendered = routeHandler.event();
-      }
-    }
-    routeTo(path, handler) {
-      this.addNewRouter(path, handler);
-    }
-  };
-  var Router = {
-    SPA: new SPA(),
-    route({ path, component, data = {}, target = () => {
-    }, onrender = () => {
-    } }) {
-      this.SPA.routeTo(path, () => {
-        const Component = Render(component, target(), data);
-        onrender(Component);
-        return Component;
-      });
-      this.SPA.render();
-    }
-  };
-
-  // node_modules/seleku-kit-material-component/component/DCard.selek
-  function DCard({
-    parentcomponent,
-    positioncomponent,
-    $class,
-    $id = 0
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "``",
-      parentComponent: parentcomponent,
-      positionComponent: positioncomponent,
-      state: {},
-      event: {},
-      attribute: {
-        "class": $class + " smc-card"
-      },
-      id: ""
-    })];
-  }
-
-  // node_modules/seleku-kit-material-component/component/DChips.selek
-  function DChips({
-    parentcomponent,
-    positioncomponent,
-    $class,
-    $id = 0
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                            `",
-      parentComponent: parentcomponent,
-      positionComponent: positioncomponent,
-      state: {},
-      event: {},
-      attribute: {
-        "class": $class + " smc-chips smc-ripple"
-      },
-      id: ""
-    }), dabMain.createRawComponent(`div`, {
-      content: "``",
-      parentComponent: positioncomponent,
-      positionComponent: "16136011000240108000287160910020" + $id,
-      state: {},
-      event: {},
-      attribute: {
-        "class": "ripple"
-      },
-      id: ""
-    })];
-  }
-
-  // node_modules/seleku-kit-material-component/component/init.js
-  function setRipple() {
-    try {
-      const letters = Array.from(document.querySelectorAll(".smc-ripple"));
-      letters.forEach((letter) => {
-        let timerId;
-        letter.addEventListener("mousedown", (e) => {
-          clearTimeout(timerId);
-          const ripple = letter.querySelector(".ripple");
-          const size = letter.offsetWidth;
-          const pos = letter.getBoundingClientRect();
-          const x = e.pageX - pos.left - size;
-          const y = e.pageY - pos.top - size - window.scrollY;
-          ripple.style = "top:" + y + "px; left:" + x + "px; width: " + size * 2 + "px; height: " + size * 2 + "px;";
-          ripple.classList?.remove("active");
-          ripple.classList?.remove("start");
-          setTimeout(() => {
-            ripple.classList?.add("start");
-            setTimeout(() => {
-              ripple.classList?.add("active");
-            });
-          });
-        });
-        letter.addEventListener("mouseup", (e) => {
-          const ripple = letter.querySelector(".ripple");
-          clearTimeout(timerId);
-          timerId = setTimeout(() => {
-            ripple.classList?.remove("active");
-            ripple.classList?.remove("start");
-          }, 500);
-        });
-      });
-    } catch (err) {
-    }
-  }
-
-  // source/component/navbar.selek
-  function Navbar({
-    parentcomponent,
-    positioncomponent
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                            `",
-      parentComponent: parentcomponent,
-      positionComponent: positioncomponent,
-      state: {},
-      event: {},
-      attribute: {
-        "class": "navbar"
-      },
-      id: ""
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                                                                                                    `",
-      parentComponent: positioncomponent,
-      positionComponent: "1512600210004005b177128202097410",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "action"
-      },
-      id: ""
-    }), dabMain.createRawComponent(`a`, {
-      content: "`                        Home                    `",
-      parentComponent: "1512600210004005b177128202097410",
-      positionComponent: "18003209704840958060100892625990",
-      state: {},
-      event: {},
-      attribute: {
-        "href": "/",
-        "data-link": ""
-      },
-      id: ""
-    }), dabMain.createRawComponent(`a`, {
-      content: "`                        Docs                    `",
-      parentComponent: "1512600210004005b177128202097410",
-      positionComponent: "1098004660044220a090300008000500",
-      state: {},
-      event: {},
-      attribute: {
-        "href": "/docs",
-        "data-link": ""
-      },
-      id: ""
-    }), dabMain.createRawComponent(`a`, {
-      content: "`                        API                    `",
-      parentComponent: "1512600210004005b177128202097410",
-      positionComponent: "34002302195647048006404508000102",
-      state: {},
-      event: {},
-      attribute: {
-        "href": "/api",
-        "data-link": ""
-      },
-      id: ""
-    }), dabMain.createRawComponent(`a`, {
-      content: "`                        Config                    `",
-      parentComponent: "1512600210004005b177128202097410",
-      positionComponent: "41821093100946088608120801723663",
-      state: {},
-      event: {},
-      attribute: {
-        "href": "/config",
-        "data-link": ""
-      },
-      id: ""
-    }), dabMain.createRawComponent(`a`, {
-      content: "`Github`",
-      parentComponent: "1512600210004005b177128202097410",
-      positionComponent: "21003000151040809509178000905580",
-      state: {},
-      event: {},
-      attribute: {
-        "href": "https://github.com/daberpro/dabCom"
-      },
-      id: ""
-    })];
-  }
-
-  // source/docs.selek
-  function Docs({
-    parentcomponent,
-    positioncomponent
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                                                            `",
-      parentComponent: "",
-      positionComponent: "80480704004340008000407470800605",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "main-content"
-      },
-      id: ""
-    }), ...Navbar({
-      "$id": "12060030706242308700100655206003",
-      "parentcomponent": "80480704004340008000407470800605",
-      "positioncomponent": "80004008130046039190100000426086"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                `",
-      parentComponent: "80480704004340008000407470800605",
-      positionComponent: "52400090810744848003355113045477",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "left"
-      },
-      id: "shortContent"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                    `",
-      parentComponent: "80480704004340008000407470800605",
-      positionComponent: "19000010120041458910104205300710",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "right"
-      },
-      id: "allContent"
-    })];
-  }
-
-  // source/api.selek
-  function Api({
-    parentcomponent,
-    positioncomponent
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                                                            `",
-      parentComponent: "",
-      positionComponent: "10100084302040109003469007282009",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "main-content"
-      },
-      id: ""
-    }), ...Navbar({
-      "$id": "9909069012024370a403680979408405",
-      "parentcomponent": "10100084302040109003469007282009",
-      "positioncomponent": "1000003268824451a716179620581006"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                `",
-      parentComponent: "10100084302040109003469007282009",
-      positionComponent: "00054002107440758010102055499068",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "left"
-      },
-      id: "shortContent"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                    `",
-      parentComponent: "10100084302040109003469007282009",
-      positionComponent: "01010337100040008818180103201039",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "right"
-      },
-      id: "allContent"
-    })];
-  }
-
-  // source/config.selek
-  function Config({
-    parentcomponent,
-    positioncomponent
-  }) {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                                                            `",
-      parentComponent: "",
-      positionComponent: "44030000140040868070865500809005",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "main-content"
-      },
-      id: ""
-    }), ...Navbar({
-      "$id": "62098595900047018700420850402530",
-      "parentcomponent": "44030000140040868070865500809005",
-      "positioncomponent": "9203822761004020b489614700060802"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                `",
-      parentComponent: "44030000140040868070865500809005",
-      positionComponent: "58059900707344428048107090021200",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "left"
-      },
-      id: "shortContent"
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                    `",
-      parentComponent: "44030000140040868070865500809005",
-      positionComponent: "13260900160845768084124479020024",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "right"
-      },
-      id: "allContent"
-    })];
-  }
-
-  // source/md/docs.md
-  var docs_default = '# # Hello From Seleku\r\nthis site create by seleku-kit and create by daberdev it self\r\n\r\n## # Apa itu seleku ?\r\nseleku adalah framework front end javascript yang berfokus kepada component dan pengembangan web3\r\nframework ini cukup simpel dan di tenagai oleh esbuild sebagai bundler nya\r\n\r\n## # kenapa seleku ?\r\nseleku memungkinkan anda untuk melakukan pembuatan component dari element html yang di tulis langsung\r\ndi dalam sintaks javascript dan beberapa fitur lainya yang memungkinkan anda melakukan development\r\nkhusus bagian frontend web, selain itu seleku di buat dengan sangat simpel dan seleku berjalan dengan dabcom library yang merupakan library utama dari seleku core system\r\n\r\n# # Getting Started\r\n## # instalasi dan requirement\r\nuntuk menggunakan seleku-kit ada terlebih dahulu harus telah memahami dasar dari web development seperti\r\n**html**,**css**,**javascript** dan pemahaman tentang node js dan npm (node package manager)\r\n\r\n#### setup node js\r\njika anda belum memiliki node js maka anda dapat mendownload di **[Download Node JS](https://nodejs.org)** setelah mendownload silahkan ikuti instruksi instalasi yang di berikan kemudian\r\nsilahkan lakukan pengecekan apakah node js telah terinstall di lokal komputer anda dengan mengetikan\r\n\r\n```bash\r\nnode --version\r\n```\r\n\r\njika node js telah terinstall maka anda dapat melihat versi dari node js yang telah di install, jika anda\r\ntelah menginstall node js maka anda juga akan secara otomatis menginstall npm (node package manager) yang akan kita gunakan untuk memanajement project seleku-kit maupun project javascript lainya\r\n\r\nuntuk melihat versi npm jalankan perintah :\r\n\r\n```bash\r\nnpm --version\r\n```\r\n\r\nkemudian untuk menginstall seleku template generator anda cukup menjalan kan perintah berikut\r\n\r\n```bash\r\nnpm i seleku-kit -g\r\n```\r\n\r\nmaka seleku akan di install secara global di komputer anda\r\n\r\n## # Membuat Project Pertama\r\nuntuk membuat project pertama silahkan jalan kan `seleku-kit` di terminal atau command prompt anda maka\r\nanda akan di minta untuk memilih template apa yang akan anda gunakan\r\nkemudian anda akan di minta untuk memasukan nama project baru yang akan anda buat\r\n\r\nsetelah anda membuat template project silahkan jalankan terminal atau command prompt anda di dalam folder\r\nproject yang telah anda buat dengan mengetikan `npm i` kemudian anda jalankan `npm run dev` untuk menjalankan seleku-kit di mode development dan anda akan melihat bahwa seleku berjalan di lokal komputer anda dengan port default bawaan\r\n\r\nsilahkan buka di web browser anda `localhost:3000` dan untuk melihat perubahan silahkan anda edit file\r\n`main.selek`\r\n\r\n# # Sintaks Dasar\r\nSeleku-kit memiliki sintaks yang merupakan gabungan dari HTML dan js sehingga bagi anda yang menggunakan react\r\nmaka anda akan merasa familiar dengan sintaks yang ada untuk memulai mari kita pahami susunan sintaks\r\n\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nRender(<h1>Hello World</h1>,document.body);\r\n\r\n```\r\n#### # Dasar - Dasar\r\n- pada bagian awal kita mengimport **dabMain** dan **Render**, \r\napa itu dab main?, **dabMain** merupakan suatu Object yang memuat semua method dan property yang akan di butuhkan untuk membuat suatu component, \r\nsedangkan **Render** merupakan fungsi yang bertugas untuk menampilkan component ke layar dengan cara memasukan component ke tag HTML yang di targetkan\r\n\r\n- pada baris ke 3 kita menggunakan fungsi **Render** dengan parameter pertama merupakan component yang akan di render dan parameter ke dua merupakan target atau tempat di rampilkan nya component\r\n\r\n## # Comment\r\nuntuk membuat komentar di dalam seleku cukup gunakan /**/ atau multi-line comment\r\nyang ada di javascript\r\n\r\n```jsx\r\n/*ini contoh komentar*/\r\n```\r\n\r\n## # Template Literal\r\nselek-kit menggunakan template literal bawaan javascript untuk menampilkan\r\nsuatu kontent text di dalam html\r\n\r\n##### contoh template literal\r\n```jsx\r\n\r\n    const seleku = "i am seleku-kit";\r\n\r\n    <h1> hello ${seleku}</h1>;\r\n\r\n```\r\n\r\n#### # function component\r\nseleku-kit memungkinkan anda untuk membuat component dari suatu fungsi sebagai berikut\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction Welcome(){\r\n\r\n    return <h1>Welcome to seleku-kit!!</h1>;\r\n\r\n}\r\n\r\nRender(<Welcome><Welcome/>,document.body);\r\n\r\n```\r\n\r\nuntuk menerima argument dari function component lakukan sebagai berikut\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction Welcome({username}){\r\n\r\n    return <h1 state="{{username}}">\r\n        Welcome to seleku-kit!! ${this.state.username}\r\n    </h1>;\r\n\r\n}\r\n\r\nRender(<Welcome username="\'Daberdev\'"><Welcome/>,document.body);\r\n\r\n```\r\n\r\nketika suatu function component menerima argument maka ketika component tersebut di panggil untuk memasukan argumen nya cukup lakukan sperti memasukan attribute di html biasa, untuk saat ini abaikan attribute state dan penggunaan template literal yang ada pada kode tersebut\r\n\r\n> pemberitahuan setiap attribute yang di miliki suatu component akan memiliki value yang di anggap javascript biasa oleh karena itu untuk memasukan suatu string ke dalam attribute gunakan `` atau \'\'\r\n\r\n\r\n## # Attribute Spesial\r\ncomponent di seleku memiliki atribut-atribut khusus maupun umum di antara nya sebagai berikut\r\n\r\n## # $toBeChild \r\nattribute **$toBeChild** merupakan attribute yang di gunakan di dalam parameter suatu funsi component\r\nattribute ini di gunakan untuk memberikan component yang ada di dalam function componentid dari parent component nya agar bisa di gunakan sebagai target untuk component yang ada di dalam function component di render\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction Welcome({$toBeChild}){\r\n\r\n    return <h1>\r\n        Welcome to seleku-kit!! \r\n    </h1>;\r\n\r\n}\r\n\r\nRender(<div><Welcome username="\'Daberdev\'"><Welcome/></div>,document.body);\r\n\r\n```\r\n\r\n## # $beChild \r\nattribute **$beChild** merupakan attribute yang berpasangan dengan attribute **$toBeChild** jika **$toBeChild** hanya memberikan semua properti untuk di gunakan kepada component yang ada di dalam function component maka **$beChild** adalah attribute yang menerima semua properti tersebut untuk kemudian di gunakan oleh component di dalam function component me render\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction Welcome({$toBeChild}){\r\n\r\n    return <h1 $beChild>\r\n        Welcome to seleku-kit!! \r\n    </h1>;\r\n\r\n}\r\n\r\nRender(<div><Welcome username="\'Daberdev\'"><Welcome/></div>,document.body);\r\n\r\n```\r\n\r\n## # $loopComponent \r\nattribute ini merupakan attribute yang hanya di miliki oleh component yang melakukan looping baik di dalam for loop maupun while bahkan array method sekalipun\r\n\r\n```jsx\r\n\r\nasync function AllContributor({$toBeChild}){\r\n\r\n    let loopingComponent = [];\r\n\r\n    const data = await (await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();\r\n\r\n    for (let x of data){\r\n\r\n        loopingComponent = [\r\n            ...loopingComponent,\r\n            ...<img \r\n            $loopComponent="x.node_id"\r\n            title="x.login" \r\n            src="x.avatar_url"/>];\r\n\r\n    }\r\n\r\n    return loopingComponent;\r\n\r\n}\r\n\r\n(async ()=> Render(<div><AllContributor $async></AllContributor></div>))();\r\n\r\n```\r\nattribute ini membutuhkan value yang merupakan id yang unik\r\n\r\n## # component:id\r\nini merupakan attribute yang berfungsi sebagai id dari suatu component\r\n> id yang di definiksan dengan id component berbeda dengan id dari HTML\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nconst card = <div component:id="example_id"></div>;\r\n\r\nRender(card,document.body);\r\n\r\n```\r\n\r\ndan perlu di ingat bahwa **component:id** hanya di miliki oleh component dari HTML bukan dari function\r\ncomponent\r\n\r\n## # state\r\nattribute ini merupakan attribute khusus dan hanya di miliki oleh component dari tag HTML dan bukan dari component function, attribute ini di gunakan untuk memasukan data dinamis yang dapat di ubah-ubah sesuai dengan kebutuhan anda dan untuk data yang di masukan harus dalam bentuk object {{}} kurung kurawal bagian luar merupakan kurung kurawal yang di gunakan untuk memberitahukan kepada kompiler bahwa kode yang terdapat di dalam kurung kurawal pertama akan di eksekusi di sisi kompiler terlebih dahulu agar tidak di anggap sebagai string oleh compiler\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction Card(){\r\n\r\n    return  <div>\r\n                <h1>Hello</h1>\r\n                <p state="{{\r\n                    count: 0\r\n                }}">count ${this.state.count}</p>\r\n            </div>;\r\n\r\n}\r\n\r\nRender(<Card></Card>,document.body);\r\n\r\n```\r\n\r\nuntuk melakukan update pada state anda harus menggunakan fungsi **findById** yang terdapat di dalam dabcom perlu di ketahui bahwa fungsi **findById** adalah fungsi yang memutuhkan id dari suatu component\r\nid dari component berbeda dengan id dari HTML\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render, findById } from "dabcom";\r\n\r\nfunction Card(){\r\n\r\n    return  <div>\r\n                <h1>Hello</h1>\r\n                <p component:id="counting" state="{{\r\n                    count: 0\r\n                }}">count ${this.state.count}</p>\r\n            </div>;\r\n\r\n}\r\n\r\nwindow.setInterval(()=>{\r\n\r\n    findById("counting").state.count++;\r\n\r\n},1000);\r\n\r\nRender(<Card></Card>,document.body);\r\n\r\n```\r\n\r\n## # on:\r\nattribute ini merupakan attribute spesial yang hanya di miliki oleh component dari tag HTML dan bukan dari function component, attribute ini di gunakan untuk membuat event pada component HTML yang di render dan untuk menggunakan cukup dengan `on:nama-event` contoh `on:click` dan untuk value dari attribute ini berupa function seperti berikut `on:click="{()=>{}}"` seleku-kit mengharuskan untuk menggunakan arrow function di dalam attribute on agar tidak terjadi error pada compiler di karena aturan kurung kurawal pertama seperti yang terdapat pada attribute state\r\n\r\n```jsx\r\n\r\nimport { dabMain, Render, findById } from "dabcom";\r\n\r\nfunction Card(){\r\n\r\n    return  <div>\r\n                <h1 on:click="{()=>{\r\n\r\n                    alert(\'hello world\');\r\n\r\n                }}">Hello</h1>\r\n            </div>;\r\n\r\n}\r\n\r\nRender(<Card></Card>,document.body);\r\n\r\n```\r\n\r\n## # $async\r\nattribute ini hanya di miliki oleh component function dan di gunakan untuk\r\nme render async component function dan parent atau component induk dari\r\nasync component function harus merupakan fungsi async\r\n\r\n### contoh\r\n\r\n```jsx\r\n\r\nasync function AllContributor({$toBeChild}){\r\n\r\n    let loopingComponent = [];\r\n\r\n    const data = await (await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();\r\n\r\n    for (let x of data){\r\n\r\n        loopingComponent = [\r\n            ...loopingComponent,\r\n            ...<img \r\n            $loopComponent="x.node_id"\r\n            title="x.login" \r\n            src="x.avatar_url"/>];\r\n\r\n    }\r\n\r\n    return loopingComponent;\r\n\r\n}\r\n\r\nconst App = async ()=>{\r\n    Render(<div><AllContributor $async></AllContributor></div>))();\r\n}\r\n\r\nApp();\r\n\r\n```\r\n\r\n# # Seleku Routing\r\nseleku-kit memiliki sistem routing menggunakan SPA (single page application) bawaan yang dapat anda gunakan\r\ndengan mudah untuk contoh kodenya sebagai berikut\r\n\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\nimport { Router } from "dabcom/spa/route.js";\r\n\r\nfunction Home(){\r\n\r\n    return <h1>Hello World!!</h1>;\r\n\r\n}\r\n\r\n<Router.route \r\n\r\n    path="\'/home\'"\r\n    component="<Home></Home>"\r\n    target="{()=>{\r\n        \r\n        return document.body;\r\n\r\n    }}"\r\n    onRender="{()=>{\r\n\r\n        console.log(\'your in home page\');\r\n\r\n    }}"\r\n\r\n></Router.route>;\r\n\r\n```\r\nberikut adalah penjelasan sintaks di atas \r\n- **Router.route** merupakan suatu fungsi yang di ambil dari dabcom library\r\n- argumen **path** merupakan argument yang di butuhkan oleh router untuk menentukan url bagi component untuk di render\r\n- argument **component** merupakan argument yang menerima component yang akan di render\r\n- argument **target** argument ini di gunakan untuk menerima element / component HTML yang akan menjadi tempat render\r\n- argument **onRender** yaitu argument yang menerima callback function ketika component di render\r\n\r\n## # mengirim data\r\nuntuk mengirimkan data ke dalam router anda cukup menggunakan attribute data\r\ndan untuk mengakses data yang di kirim cukup gunakan this di ikuti dengan nama property dari data yang di kirim\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\nimport { Router } from "dabcom/spa/route.js";\r\n\r\nfunction Home(){\r\n\r\n    return <h1>Hello ${this.user}!!</h1>;\r\n\r\n}\r\n\r\n<Router.route \r\n\r\n    path="\'/home\'"\r\n    component="<Home></Home>"\r\n    target="{()=>{\r\n        \r\n        return document.body;\r\n\r\n    }}"\r\n    onRender="{()=>{\r\n\r\n        console.log(\'your in home page\');\r\n\r\n    }}"\r\n\r\n    data = "{{\r\n        user: \'daber\'\r\n    }}"\r\n\r\n></Router.route>;\r\n\r\n```\r\nuntuk melakukan pemindahan url gunakan element a href di ikuti dengan attribute\r\n**data-link**\r\n\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\nimport { Router } from "dabcom/spa/route.js";\r\n\r\nfunction Home(){\r\n\r\n    return <h1>\r\n        Hello ${this.user}!!\r\n        <a href="\'/about\'" data-link>to About</a>\r\n    </h1>\r\n\r\n}\r\n\r\nfunction About(){\r\n\r\n    return <h1>\r\n        i create by seleku-kit\r\n        <a href="\'/home\'" data-link>to Home</a>\r\n    </h1>\r\n\r\n}\r\n\r\n<Router.route \r\n\r\n    path="\'/home\'"\r\n    component="<Home></Home>"\r\n    target="{()=>{\r\n        \r\n        return document.body;\r\n\r\n    }}"\r\n    onRender="{()=>{\r\n\r\n        console.log(\'your in home page\');\r\n\r\n    }}"\r\n\r\n    data = "{{\r\n        user: \'daber\'\r\n    }}"\r\n\r\n></Router.route>;\r\n\r\n<Router.route \r\n\r\n    path="\'/about\'"\r\n    component="<About></About>"\r\n    target="{()=>{\r\n        \r\n        return document.body;\r\n\r\n    }}"\r\n    onRender="{()=>{\r\n\r\n        console.log(\'your in home page\');\r\n\r\n    }}"\r\n></Router.route>;\r\n\r\n```\r\n\r\n# # Loop Component\r\nseleku juga memungkinkan anda untuk melakukan loop pada component pada bagian\r\nattribute **$loopComponent** anda telah melihat bahwa seleku-kit memiliki attribute tersebut yang harus di gunakan pada saat anda melakukan\r\nlooping pada component baik itu menggunakan for ataupun while bahkan \r\narray method sekalipun\r\n\r\n## # Loop example\r\nseleku-kit sebenarnya melakukan compile yaitu mentransformasi sintaks dari .selek\r\nke .js sehingga suatu component baik itu function component maupun HTML component\r\nakan di ubah menjadi sintaks javascript yang merupakan suatu array ataupun mengembalikan suatu array oleh karena itu ketika anda melakukan looping \r\ndi haruskan untuk mengurai array yang di bentuk oleh compiler kemudian di push\r\nke dalam array yang baru\r\n\r\n### # Contoh For Loop\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nconst allFruits = ["grape","apple","strawberry","pinapple"];\r\n\r\nfunction FruitsName(){\r\n\r\n    let newCompoonent = [];\r\n\r\n    for(let x in allFruits){\r\n        /*ingat anda harus mengisikan id yang unik untuk loop component*/\r\n        newComponent = [\r\n            ...newComponent,\r\n            ...<h1 $loopComponent="x" state="{{content: allFruits[x]}}">\r\n                ${this.state.content}\r\n               </h1>\r\n        ];\r\n\r\n    }\r\n\r\n    /*anda harus mengembalikan array dari component yang baru*/\r\n\r\n    return newComponent;\r\n\r\n}\r\n\r\n```\r\n\r\nuntuk contoh lainya anda dapat melakukan penerapan yang sama baik pada while maupun\r\narray method\r\n\r\n# # Render\r\nsejauh ini kita sering melihat fungsi **Render** di hampir setiap contoh kode\r\ndan telah di jelaskan di beberapa sub-docs bahwa fungsi ini merupakan fungsi\r\nyang di tugaskan untuk me render tetapi apakah hanya untuk me render static?, tentu tidak fungsi ini juga dapat melakukan update render dan melakukan pengiriman\r\ndata ke dalam component yang di render\r\n\r\n### Contoh Kode\r\n\r\n## # Render Update\r\n\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction SayHello({gender}){\r\n\r\n    if(gender === "male"){\r\n\r\n        return <h1>Hello mr</h1>\r\n\r\n    }\r\n\r\n    if(gender === "female"){\r\n\r\n        return <h1>Hello mrs</h1>\r\n\r\n    }\r\n\r\n}\r\n\r\nconst say = Render(<SayHello gender="\'male\'"></SayHello>,document.body);\r\n\r\nsay.updateComponentProperty(SayHello,{\r\n    gender: "female"\r\n});\r\n\r\n```\r\nfungsi **Render** akan mengembalikan suatu fungsi **updateComponentProperty** di mana\r\nfungsi ini akan melakukan update terhadap render dengan properti yang di terima\r\nuntuk parameter pertama pada fungsi ini yaitu component function dan paramter ke 2\r\nmerupakan properti yang akan anda update\r\n\r\n## # Embbed Data\r\n\r\nseperti yang telah di beritahukan bahwa fungsi **Render** dapat melakukan pengiriman data yang akan di embbed ke dalam component dan untuk mengakses nya\r\ncukup gunakan this di ikuti dengan nama property yang di embbed\r\n\r\n```jsx\r\nimport { dabMain, Render } from "dabcom";\r\n\r\nfunction SayHello({gender}){\r\n\r\n    if(gender === "male"){\r\n\r\n        return <h1>Hello mr ${this.username}</h1>\r\n\r\n    }\r\n\r\n    if(gender === "female"){\r\n\r\n        return <h1>Hello mrs ${this.username}</h1>\r\n\r\n    }\r\n\r\n}\r\n\r\nconst say = Render(<SayHello gender="\'male\'"></SayHello>,\r\n            document.body,\r\n            {\r\n                username: "`nanda`"\r\n            });\r\n\r\nsay.updateComponentProperty(SayHello,{\r\n    gender: "female"\r\n});\r\n\r\n```\r\ntapi perlu di ingat bahwa embbed data ini merupakan data statis bukan data dinamis\r\n\r\n# # Whats Next ?\r\nuntuk saat ini seleku masih dalam tahap pengembangan dan akan terus di lakukan\r\nupdate untuk selanjutnya seleku akan memiliki fitur web3 yang saat ini sedang di development ';
-
-  // source/md/api.md
-  var api_default = "# All API\r\n## # Render\r\n**`Render : Function`**\r\n\r\n```ts\r\nRender(component: Component, target: HTMLElement, embbedData: Object)\r\n```\r\n\r\n|Argument | Description |\r\n|:--------|:-----------|\r\n|component|komponent yang akan di render bisa berupa component function atau component HTML|\r\n|target| HTMLElement yang akan menjadi tempat di render nya component|\r\n|embbedData| merupakan data bertipe object yang akan di masukan ke dalam component|\r\n\r\n| Method      | Description |\r\n| :----------- | :----------- |\r\n| updateComponentProperty| melakukan update pada component yang di render |\r\n```ts\r\nRender(component: Component, target: HTMLElement, embbedData: Object).updateComponentProperty(componentFunction: ComponentFunctiom,data: Object);\r\n```\r\n\r\n## # findById\r\n**`findById : Function`**\r\n\r\n```ts\r\nfindById(componentId: String)\r\n```\r\n\r\n|Argument | Description |\r\n|:--------|:-----------|\r\n|componentId|component:id dari suatu component|\r\n\r\n## # Router\r\n**`Router : Object`**\r\n\r\n```ts\r\nRouter\r\n```\r\n\r\n| Method      | Description |\r\n| :----------- | :----------- |\r\n| route| melakukan routing|\r\n\r\n```ts\r\nRouter.route(Object: {path: String,target: Function,component: Component,data: Object})\r\n```";
-
-  // source/md/config.md
-  var config_default = "# Config\r\nseleku menggunakan esbuild sebagai bundler nya untuk melakukan config maka\r\nanda cukup melakukan pengautran pada file `esbuild.config.json` atau `build.config.json` untuk mendapatkan configurasi silahkan kunjungi web resmi esbuild\r\n**[Esbuild Config](https://esbuild.github.io/getting-started/)**";
-
-  // source/main.selek
-  async function AllContributor({
-    parentcomponent,
-    positioncomponent
-  }) {
-    let loopingComponent = [];
-    const data = await (await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();
-    for (let x of data) {
-      loopingComponent = [...loopingComponent, ...[dabMain.createRawComponent(`img`, {
-        content: "``",
-        parentComponent: parentcomponent,
-        positionComponent: "15050100149047638600380708000408" + x.node_id,
-        state: {},
-        event: {},
-        attribute: {
-          "title": x.login,
-          "src": x.avatar_url
-        },
-        id: ""
-      })]];
-    }
-    return loopingComponent;
-  }
-  async function MainContent() {
-    return [dabMain.createRawComponent(`div`, {
-      content: "`                                                                                                            `",
-      parentComponent: "",
-      positionComponent: "4020200211004506a208910009043000",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "hero"
-      },
-      id: ""
-    }), ...Navbar({
-      "$id": "7068380070194880a512130000700799",
-      "parentcomponent": "4020200211004506a208910009043000",
-      "positioncomponent": "10600909100848508250140078423600"
-    }), ...DCard({
-      "$id": "9300690960954030a600807307908193",
-      "$class": "main-panel",
-      "parentcomponent": "4020200211004506a208910009043000",
-      "positioncomponent": "20020080057040058860700409040707"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`                        # Seleku-kit                    `",
-      parentComponent: "20020080057040058860700409040707",
-      positionComponent: "53406050608840008001196109300008",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`p`, {
-      content: "`                        simplify to make the web fast without leaving javascript to write HTML                    `",
-      parentComponent: "20020080057040058860700409040707",
-      positionComponent: "17400699134244709000909009810095",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), ...DChips({
-      "$id": "19054000640049148434930204810200",
-      "parentcomponent": "20020080057040058860700409040707",
-      "positioncomponent": "10127005800649168080613206000001"
-    }), dabMain.createRawComponent(`i`, {
-      content: "``",
-      parentComponent: "10127005800649168080613206000001",
-      positionComponent: "10820108250449009400300008000000",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "fas fa-arrow-down"
-      },
-      id: ""
-    }), dabMain.createRawComponent(`span`, {
-      content: "`Read More..`",
-      parentComponent: "10127005800649168080613206000001",
-      positionComponent: "20036851333340008100180008720940",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                    `",
-      parentComponent: "4020200211004506a208910009043000",
-      positionComponent: "57852000630040209068100070003309",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "saparator"
-      },
-      id: ""
-    }), ...DChips({
-      "$id": "28004600540042848026170997043705",
-      "parentcomponent": "57852000630040209068100070003309",
-      "positioncomponent": "50305090107049109319430037200474"
-    }), dabMain.createRawComponent(`h2`, {
-      content: "`                            Seleku-kit feature                        `",
-      parentComponent: "50305090107049109319430037200474",
-      positionComponent: "39500704602942158832580050315480",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                                                            `",
-      parentComponent: "4020200211004506a208910009043000",
-      positionComponent: "10800047400540269003108001428268",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "feature"
-      },
-      id: ""
-    }), ...DCard({
-      "$id": "09000030620044148500081668802006",
-      "$class": "mini-card",
-      "parentcomponent": "10800047400540269003108001428268",
-      "positioncomponent": "13100860180149418200606200369840"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`Reactive`",
-      parentComponent: "13100860180149418200606200369840",
-      positionComponent: "14900050120147889390740958887001",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`p`, {
-      content: "`                            seleku kit menggunakan reaktivitas untuk melakukan update ui                        `",
-      parentComponent: "13100860180149418200606200369840",
-      positionComponent: "53159060374840029619126801800041",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), ...DCard({
-      "$id": "19907230100243008896192009065000",
-      "$class": "mini-card",
-      "parentcomponent": "10800047400540269003108001428268",
-      "positioncomponent": "7706099320014069b209190423097060"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`Web3`",
-      parentComponent: "7706099320014069b209190423097060",
-      positionComponent: "45062143133048009099600745320633",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`p`, {
-      content: "`                            fitur utama dari seleku kit adalah web3 frontend, membuat website desentralisasi dengan blockchain                        `",
-      parentComponent: "7706099320014069b209190423097060",
-      positionComponent: "10000363350444409087018608800667",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), ...DCard({
-      "$id": "4069482218004096a400102001015990",
-      "$class": "mini-card",
-      "parentcomponent": "10800047400540269003108001428268",
-      "positioncomponent": "67801536106742008003500149372000"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`Metaverse`",
-      parentComponent: "67801536106742008003500149372000",
-      positionComponent: "24005067133340359005502104000323",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`p`, {
-      content: "`                            dukungan penuh dalam pengembangan pemrograman berbasis grafis pada web dan memungkinkan pengembangan metaverse                        `",
-      parentComponent: "67801536106742008003500149372000",
-      positionComponent: "72801557503641349204303267050550",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), ...DCard({
-      "$id": "9701400010304050b022102080800096",
-      "$class": "powered",
-      "parentcomponent": "4020200211004506a208910009043000",
-      "positioncomponent": "34623711806844008007121004009862"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`Powered By EsBuild`",
-      parentComponent: "34623711806844008007121004009862",
-      positionComponent: "80397000680746008013210000400781",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`p`, {
-      content: "`                        seleku kit berjalan diatas esbuild, esbuild sebagai bundler dan memungkinkan developer untuk melakukan banyak hal yang menjadi keterbatasan antara node js dengan frontend                    `",
-      parentComponent: "34623711806844008007121004009862",
-      positionComponent: "40420134180242058301101433501607",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), dabMain.createRawComponent(`div`, {
-      content: "`                                                        `",
-      parentComponent: "4020200211004506a208910009043000",
-      positionComponent: "96030080100840308004303456180400",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "contributor"
-      },
-      id: "a"
-    }), dabMain.createRawComponent(`h1`, {
-      content: "`Contributors`",
-      parentComponent: "96030080100840308004303456180400",
-      positionComponent: "4239294010934000a000170970505558",
-      state: {},
-      event: {},
-      attribute: {},
-      id: ""
-    }), ...await AllContributor({
-      "$id": "24941701358040328134102734107080",
-      "parentcomponent": "96030080100840308004303456180400",
-      "positioncomponent": "6079670020734000a000115696500900"
-    })];
-  }
-  async function allDocsEvent(content) {
-    const allDocsContent = findById("allContent").element;
-    const shortContent = findById("shortContent").element;
-    let allShortName = {};
-    let previousParent = null;
-    let previousChild = null;
-    if (allDocsContent instanceof HTMLElement) {
-      allDocsContent.innerHTML = marked.parse(content);
-      let allChild = [...allDocsContent.children];
-      allChild = allChild.filter((e) => e.nodeName.toLowerCase() === "h1" || e.nodeName.toLowerCase() === "h2" || e.nodeName.toLowerCase() === "h4");
-      for (let x of allChild) {
-        if (x.nodeName.toLowerCase() === "h1") {
-          allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`details`, {
-            content: "``",
-            parentComponent: "",
-            positionComponent: "49200063137044908900246016605015",
-            state: {},
-            event: {},
-            attribute: {
-              "class": "tree-nav__item is-expandable"
-            },
-            id: ""
-          }), dabMain.createRawComponent(`summary`, {
-            content: "`${this.state.content}`",
-            parentComponent: "49200063137044908900246016605015",
-            positionComponent: "8170053710084021b016333030005115",
-            state: {
-              content: x.textContent
-            },
-            event: {
-              onclick: () => {
-                x.scrollIntoView();
-              }
-            },
-            attribute: {
-              "class": "tree-nav__item-title"
-            },
-            id: ""
-          })], shortContent).component.element;
-          previousParent = x.textContent.replace(/\s/igm, "");
-          previousChild = x.nodeName.toLowerCase();
-        } else if (x.nodeName.toLowerCase() === "h2") {
-          allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`details`, {
-            content: "``",
-            parentComponent: "",
-            positionComponent: "72000007114040009492106038004507",
-            state: {},
-            event: {},
-            attribute: {
-              "class": "tree-nav__item is-expandable"
-            },
-            id: ""
-          }), dabMain.createRawComponent(`summary`, {
-            content: "`${this.state.content}`",
-            parentComponent: "72000007114040009492106038004507",
-            positionComponent: "1091160009204031b020100800200040",
-            state: {
-              content: x.textContent
-            },
-            event: {
-              onclick: () => {
-                x.scrollIntoView();
-              }
-            },
-            attribute: {
-              "class": "tree-nav__item-title"
-            },
-            id: ""
-          })], allShortName[previousParent]).component.element;
-          previousChild = x.nodeName.toLowerCase();
-          if (previousChild !== "h2") {
-            previousParent = x.textContent.replace(/\s/igm, "");
-          }
-        } else {
-          allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`summary`, {
-            content: "`${this.state.content}`",
-            parentComponent: "",
-            positionComponent: "24005807030040659890806160748600",
-            state: {
-              content: x.textContent
-            },
-            event: {
-              onclick: () => {
-                x.scrollIntoView();
-              }
-            },
-            attribute: {
-              "class": "tree-nav__item-title"
-            },
-            id: ""
-          })], allShortName[previousParent]).component.element;
-        }
-      }
-    }
-    hljs.highlightAll();
-    let options2 = {
-      contentSelector: ".main-content",
-      copyIconClass: "fas fa-copy",
-      checkIconClass: "fas fa-check text-success"
-    };
-    window.highlightJsBadge(options2);
-    Render([dabMain.createRawComponent(`button`, {
-      content: "``",
-      parentComponent: "",
-      positionComponent: "1086900460944011a010148007003006",
-      state: {},
-      event: {
-        onclick: () => {
-          shortContent.classList.toggle("show");
-        }
-      },
-      attribute: {
-        "class": "panel-btn"
-      },
-      id: ""
-    }), dabMain.createRawComponent(`i`, {
-      content: "``",
-      parentComponent: "1086900460944011a010148007003006",
-      positionComponent: "10864400620040008006504400000009",
-      state: {},
-      event: {},
-      attribute: {
-        "class": "fas fa-bars"
-      },
-      id: ""
-    })], allDocsContent);
-  }
-  async function main() {
-    Router.route({
-      "$id": "31188208700648858588120763600404",
-      "path": "/",
-      "component": await MainContent({
-        "$id": "8041535089084000a580100933020500"
-      }),
-      "target": () => {
-        return document.body;
-      },
-      "onrender": () => {
-        setRipple();
-      }
-    });
-  }
-  main();
-  Router.route({
-    "$id": "21640518403340058090102002707050",
-    "path": "/docs",
-    "component": Docs({
-      "$id": "63170439101643828009070404111204"
-    }),
-    "target": () => {
-      return document.body;
-    },
-    "onrender": () => {
-      allDocsEvent(docs_default);
-    }
-  });
-  Router.route({
-    "$id": "11309680808740598200100002801117",
-    "path": "/api",
-    "component": Api({
-      "$id": "8008802616004006b923503003640014"
-    }),
-    "target": () => {
-      return document.body;
-    },
-    "onrender": () => {
-      allDocsEvent(api_default);
-    }
-  });
-  Router.route({
-    "$id": "10458591800740058388100955041937",
-    "path": "/config",
-    "component": Config({
-      "$id": "10008000529047408450902609730080"
-    }),
-    "target": () => {
-      return document.body;
-    },
-    "onrender": () => {
-      allDocsEvent(config_default);
-    }
-  });
-})();
+(()=>{function ie(){return{baseUrl:null,breaks:!1,extensions:null,gfm:!0,headerIds:!0,headerPrefix:"",highlight:null,langPrefix:"language-",mangle:!0,pedantic:!1,renderer:null,sanitize:!1,sanitizer:null,silent:!1,smartLists:!1,smartypants:!1,tokenizer:null,walkTokens:null,xhtml:!1}}var D=ie();function ge(o){D=o}var ke=/[&<>"']/,fe=/[&<>"']/g,be=/[<>"']|&(?!#?\w+;)/,we=/[<>"']|&(?!#?\w+;)/g,xe={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},Y=o=>xe[o];function x(o,e){if(e){if(ke.test(o))return o.replace(fe,Y)}else if(be.test(o))return o.replace(we,Y);return o}var Ce=/&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig;function oe(o){return o.replace(Ce,(e,n)=>(n=n.toLowerCase(),n==="colon"?":":n.charAt(0)==="#"?n.charAt(1)==="x"?String.fromCharCode(parseInt(n.substring(2),16)):String.fromCharCode(+n.substring(1)):""))}var ye=/(^|[^\[])\^/g;function f(o,e){o=o.source||o,e=e||"";let n={replace:(t,a)=>(a=a.source||a,a=a.replace(ye,"$1"),o=o.replace(t,a),n),getRegex:()=>new RegExp(o,e)};return n}var Re=/[^\w:]/g,ve=/^$|^[a-z][a-z0-9+.-]*:|^[?#]/i;function K(o,e,n){if(o){let t;try{t=decodeURIComponent(oe(n)).replace(Re,"").toLowerCase()}catch{return null}if(t.indexOf("javascript:")===0||t.indexOf("vbscript:")===0||t.indexOf("data:")===0)return null}e&&!ve.test(n)&&(n=je(e,n));try{n=encodeURI(n).replace(/%25/g,"%")}catch{return null}return n}var q={},_e=/^[^:]+:\/*[^/]*$/,$e=/^([^:]+:)[\s\S]*$/,Te=/^([^:]+:\/*[^/]*)[\s\S]*$/;function je(o,e){q[" "+o]||(_e.test(o)?q[" "+o]=o+"/":q[" "+o]=N(o,"/",!0)),o=q[" "+o];let n=o.indexOf(":")===-1;return e.substring(0,2)==="//"?n?e:o.replace($e,"$1")+e:e.charAt(0)==="/"?n?e:o.replace(Te,"$1")+e:o+e}var P={exec:function(){}};function R(o){let e=1,n,t;for(;e<arguments.length;e++){n=arguments[e];for(t in n)Object.prototype.hasOwnProperty.call(n,t)&&(o[t]=n[t])}return o}function ee(o,e){let n=o.replace(/\|/g,(i,r,s)=>{let l=!1,c=r;for(;--c>=0&&s[c]==="\\";)l=!l;return l?"|":" |"}),t=n.split(/ \|/),a=0;if(t[0].trim()||t.shift(),t.length>0&&!t[t.length-1].trim()&&t.pop(),t.length>e)t.splice(e);else for(;t.length<e;)t.push("");for(;a<t.length;a++)t[a]=t[a].trim().replace(/\\\|/g,"|");return t}function N(o,e,n){let t=o.length;if(t===0)return"";let a=0;for(;a<t;){let i=o.charAt(t-a-1);if(i===e&&!n)a++;else if(i!==e&&n)a++;else break}return o.substr(0,t-a)}function Se(o,e){if(o.indexOf(e[1])===-1)return-1;let n=o.length,t=0,a=0;for(;a<n;a++)if(o[a]==="\\")a++;else if(o[a]===e[0])t++;else if(o[a]===e[1]&&(t--,t<0))return a;return-1}function re(o){o&&o.sanitize&&!o.silent&&console.warn("marked(): sanitize and sanitizer parameters are deprecated since version 0.7.0, should not be used and will be removed in the future. Read more here: https://marked.js.org/#/USING_ADVANCED.md#options")}function te(o,e){if(e<1)return"";let n="";for(;e>1;)e&1&&(n+=o),e>>=1,o+=o;return n+o}function ne(o,e,n,t){let a=e.href,i=e.title?x(e.title):null,r=o[1].replace(/\\([\[\]])/g,"$1");if(o[0].charAt(0)!=="!"){t.state.inLink=!0;let s={type:"link",raw:n,href:a,title:i,text:r,tokens:t.inlineTokens(r,[])};return t.state.inLink=!1,s}else return{type:"image",raw:n,href:a,title:i,text:x(r)}}function ze(o,e){let n=o.match(/^(\s+)(?:```)/);if(n===null)return e;let t=n[1];return e.split(`
+`).map(a=>{let i=a.match(/^\s+/);if(i===null)return a;let[r]=i;return r.length>=t.length?a.slice(t.length):a}).join(`
+`)}var Z=class{constructor(e){this.options=e||D}space(e){let n=this.rules.block.newline.exec(e);if(n&&n[0].length>0)return{type:"space",raw:n[0]}}code(e){let n=this.rules.block.code.exec(e);if(n){let t=n[0].replace(/^ {1,4}/gm,"");return{type:"code",raw:n[0],codeBlockStyle:"indented",text:this.options.pedantic?t:N(t,`
+`)}}}fences(e){let n=this.rules.block.fences.exec(e);if(n){let t=n[0],a=ze(t,n[3]||"");return{type:"code",raw:t,lang:n[2]?n[2].trim():n[2],text:a}}}heading(e){let n=this.rules.block.heading.exec(e);if(n){let t=n[2].trim();if(/#$/.test(t)){let i=N(t,"#");(this.options.pedantic||!i||/ $/.test(i))&&(t=i.trim())}let a={type:"heading",raw:n[0],depth:n[1].length,text:t,tokens:[]};return this.lexer.inline(a.text,a.tokens),a}}hr(e){let n=this.rules.block.hr.exec(e);if(n)return{type:"hr",raw:n[0]}}blockquote(e){let n=this.rules.block.blockquote.exec(e);if(n){let t=n[0].replace(/^ *> ?/gm,"");return{type:"blockquote",raw:n[0],tokens:this.lexer.blockTokens(t,[]),text:t}}}list(e){let n=this.rules.block.list.exec(e);if(n){let t,a,i,r,s,l,c,h,w,k,m,M,y=n[1].trim(),$=y.length>1,b={type:"list",raw:"",ordered:$,start:$?+y.slice(0,-1):"",loose:!1,items:[]};y=$?`\\d{1,9}\\${y.slice(-1)}`:`\\${y}`,this.options.pedantic&&(y=$?y:"[*+-]");let C=new RegExp(`^( {0,3}${y})((?: [^\\n]*)?(?:\\n|$))`);for(;e&&(M=!1,!(!(n=C.exec(e))||this.rules.block.hr.test(e)));){if(t=n[0],e=e.substring(t.length),h=n[2].split(`
+`,1)[0],w=e.split(`
+`,1)[0],this.options.pedantic?(r=2,m=h.trimLeft()):(r=n[2].search(/[^ ]/),r=r>4?1:r,m=h.slice(r),r+=n[1].length),l=!1,!h&&/^ *$/.test(w)&&(t+=w+`
+`,e=e.substring(w.length+1),M=!0),!M){let j=new RegExp(`^ {0,${Math.min(3,r-1)}}(?:[*+-]|\\d{1,9}[.)])`);for(;e&&(k=e.split(`
+`,1)[0],h=k,this.options.pedantic&&(h=h.replace(/^ {1,4}(?=( {4})*[^ ])/g,"  ")),!j.test(h));){if(h.search(/[^ ]/)>=r||!h.trim())m+=`
+`+h.slice(r);else if(!l)m+=`
+`+h;else break;!l&&!h.trim()&&(l=!0),t+=k+`
+`,e=e.substring(k.length+1)}}b.loose||(c?b.loose=!0:/\n *\n *$/.test(t)&&(c=!0)),this.options.gfm&&(a=/^\[[ xX]\] /.exec(m),a&&(i=a[0]!=="[ ] ",m=m.replace(/^\[[ xX]\] +/,""))),b.items.push({type:"list_item",raw:t,task:!!a,checked:i,loose:!1,text:m}),b.raw+=t}b.items[b.items.length-1].raw=t.trimRight(),b.items[b.items.length-1].text=m.trimRight(),b.raw=b.raw.trimRight();let L=b.items.length;for(s=0;s<L;s++){this.lexer.state.top=!1,b.items[s].tokens=this.lexer.blockTokens(b.items[s].text,[]);let j=b.items[s].tokens.filter(z=>z.type==="space"),S=j.every(z=>{let O=z.raw.split(""),B=0;for(let he of O)if(he===`
+`&&(B+=1),B>1)return!0;return!1});!b.loose&&j.length&&S&&(b.loose=!0,b.items[s].loose=!0)}return b}}html(e){let n=this.rules.block.html.exec(e);if(n){let t={type:"html",raw:n[0],pre:!this.options.sanitizer&&(n[1]==="pre"||n[1]==="script"||n[1]==="style"),text:n[0]};return this.options.sanitize&&(t.type="paragraph",t.text=this.options.sanitizer?this.options.sanitizer(n[0]):x(n[0]),t.tokens=[],this.lexer.inline(t.text,t.tokens)),t}}def(e){let n=this.rules.block.def.exec(e);if(n){n[3]&&(n[3]=n[3].substring(1,n[3].length-1));let t=n[1].toLowerCase().replace(/\s+/g," ");return{type:"def",tag:t,raw:n[0],href:n[2],title:n[3]}}}table(e){let n=this.rules.block.table.exec(e);if(n){let t={type:"table",header:ee(n[1]).map(a=>({text:a})),align:n[2].replace(/^ *|\| *$/g,"").split(/ *\| */),rows:n[3]&&n[3].trim()?n[3].replace(/\n[ \t]*$/,"").split(`
+`):[]};if(t.header.length===t.align.length){t.raw=n[0];let a=t.align.length,i,r,s,l;for(i=0;i<a;i++)/^ *-+: *$/.test(t.align[i])?t.align[i]="right":/^ *:-+: *$/.test(t.align[i])?t.align[i]="center":/^ *:-+ *$/.test(t.align[i])?t.align[i]="left":t.align[i]=null;for(a=t.rows.length,i=0;i<a;i++)t.rows[i]=ee(t.rows[i],t.header.length).map(c=>({text:c}));for(a=t.header.length,r=0;r<a;r++)t.header[r].tokens=[],this.lexer.inlineTokens(t.header[r].text,t.header[r].tokens);for(a=t.rows.length,r=0;r<a;r++)for(l=t.rows[r],s=0;s<l.length;s++)l[s].tokens=[],this.lexer.inlineTokens(l[s].text,l[s].tokens);return t}}}lheading(e){let n=this.rules.block.lheading.exec(e);if(n){let t={type:"heading",raw:n[0],depth:n[2].charAt(0)==="="?1:2,text:n[1],tokens:[]};return this.lexer.inline(t.text,t.tokens),t}}paragraph(e){let n=this.rules.block.paragraph.exec(e);if(n){let t={type:"paragraph",raw:n[0],text:n[1].charAt(n[1].length-1)===`
+`?n[1].slice(0,-1):n[1],tokens:[]};return this.lexer.inline(t.text,t.tokens),t}}text(e){let n=this.rules.block.text.exec(e);if(n){let t={type:"text",raw:n[0],text:n[0],tokens:[]};return this.lexer.inline(t.text,t.tokens),t}}escape(e){let n=this.rules.inline.escape.exec(e);if(n)return{type:"escape",raw:n[0],text:x(n[1])}}tag(e){let n=this.rules.inline.tag.exec(e);if(n)return!this.lexer.state.inLink&&/^<a /i.test(n[0])?this.lexer.state.inLink=!0:this.lexer.state.inLink&&/^<\/a>/i.test(n[0])&&(this.lexer.state.inLink=!1),!this.lexer.state.inRawBlock&&/^<(pre|code|kbd|script)(\s|>)/i.test(n[0])?this.lexer.state.inRawBlock=!0:this.lexer.state.inRawBlock&&/^<\/(pre|code|kbd|script)(\s|>)/i.test(n[0])&&(this.lexer.state.inRawBlock=!1),{type:this.options.sanitize?"text":"html",raw:n[0],inLink:this.lexer.state.inLink,inRawBlock:this.lexer.state.inRawBlock,text:this.options.sanitize?this.options.sanitizer?this.options.sanitizer(n[0]):x(n[0]):n[0]}}link(e){let n=this.rules.inline.link.exec(e);if(n){let t=n[2].trim();if(!this.options.pedantic&&/^</.test(t)){if(!/>$/.test(t))return;let r=N(t.slice(0,-1),"\\");if((t.length-r.length)%2===0)return}else{let r=Se(n[2],"()");if(r>-1){let l=(n[0].indexOf("!")===0?5:4)+n[1].length+r;n[2]=n[2].substring(0,r),n[0]=n[0].substring(0,l).trim(),n[3]=""}}let a=n[2],i="";if(this.options.pedantic){let r=/^([^'"]*[^\s])\s+(['"])(.*)\2/.exec(a);r&&(a=r[1],i=r[3])}else i=n[3]?n[3].slice(1,-1):"";return a=a.trim(),/^</.test(a)&&(this.options.pedantic&&!/>$/.test(t)?a=a.slice(1):a=a.slice(1,-1)),ne(n,{href:a&&a.replace(this.rules.inline._escapes,"$1"),title:i&&i.replace(this.rules.inline._escapes,"$1")},n[0],this.lexer)}}reflink(e,n){let t;if((t=this.rules.inline.reflink.exec(e))||(t=this.rules.inline.nolink.exec(e))){let a=(t[2]||t[1]).replace(/\s+/g," ");if(a=n[a.toLowerCase()],!a||!a.href){let i=t[0].charAt(0);return{type:"text",raw:i,text:i}}return ne(t,a,t[0],this.lexer)}}emStrong(e,n,t=""){let a=this.rules.inline.emStrong.lDelim.exec(e);if(!a||a[3]&&t.match(/[\p{L}\p{N}]/u))return;let i=a[1]||a[2]||"";if(!i||i&&(t===""||this.rules.inline.punctuation.exec(t))){let r=a[0].length-1,s,l,c=r,h=0,w=a[0][0]==="*"?this.rules.inline.emStrong.rDelimAst:this.rules.inline.emStrong.rDelimUnd;for(w.lastIndex=0,n=n.slice(-1*e.length+r);(a=w.exec(n))!=null;){if(s=a[1]||a[2]||a[3]||a[4]||a[5]||a[6],!s)continue;if(l=s.length,a[3]||a[4]){c+=l;continue}else if((a[5]||a[6])&&r%3&&!((r+l)%3)){h+=l;continue}if(c-=l,c>0)continue;if(l=Math.min(l,l+c+h),Math.min(r,l)%2){let m=e.slice(1,r+a.index+l);return{type:"em",raw:e.slice(0,r+a.index+l+1),text:m,tokens:this.lexer.inlineTokens(m,[])}}let k=e.slice(2,r+a.index+l-1);return{type:"strong",raw:e.slice(0,r+a.index+l+1),text:k,tokens:this.lexer.inlineTokens(k,[])}}}}codespan(e){let n=this.rules.inline.code.exec(e);if(n){let t=n[2].replace(/\n/g," "),a=/[^ ]/.test(t),i=/^ /.test(t)&&/ $/.test(t);return a&&i&&(t=t.substring(1,t.length-1)),t=x(t,!0),{type:"codespan",raw:n[0],text:t}}}br(e){let n=this.rules.inline.br.exec(e);if(n)return{type:"br",raw:n[0]}}del(e){let n=this.rules.inline.del.exec(e);if(n)return{type:"del",raw:n[0],text:n[2],tokens:this.lexer.inlineTokens(n[2],[])}}autolink(e,n){let t=this.rules.inline.autolink.exec(e);if(t){let a,i;return t[2]==="@"?(a=x(this.options.mangle?n(t[1]):t[1]),i="mailto:"+a):(a=x(t[1]),i=a),{type:"link",raw:t[0],text:a,href:i,tokens:[{type:"text",raw:a,text:a}]}}}url(e,n){let t;if(t=this.rules.inline.url.exec(e)){let a,i;if(t[2]==="@")a=x(this.options.mangle?n(t[0]):t[0]),i="mailto:"+a;else{let r;do r=t[0],t[0]=this.rules.inline._backpedal.exec(t[0])[0];while(r!==t[0]);a=x(t[0]),t[1]==="www."?i="http://"+a:i=a}return{type:"link",raw:t[0],text:a,href:i,tokens:[{type:"text",raw:a,text:a}]}}}inlineText(e,n){let t=this.rules.inline.text.exec(e);if(t){let a;return this.lexer.state.inRawBlock?a=this.options.sanitize?this.options.sanitizer?this.options.sanitizer(t[0]):x(t[0]):t[0]:a=x(this.options.smartypants?n(t[0]):t[0]),{type:"text",raw:t[0],text:a}}}},d={newline:/^(?: *(?:\n|$))+/,code:/^( {4}[^\n]+(?:\n(?: *(?:\n|$))*)?)+/,fences:/^ {0,3}(`{3,}(?=[^`\n]*\n)|~{3,})([^\n]*)\n(?:|([\s\S]*?)\n)(?: {0,3}\1[~`]* *(?=\n|$)|$)/,hr:/^ {0,3}((?:- *){3,}|(?:_ *){3,}|(?:\* *){3,})(?:\n+|$)/,heading:/^ {0,3}(#{1,6})(?=\s|$)(.*)(?:\n+|$)/,blockquote:/^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/,list:/^( {0,3}bull)( [^\n]+?)?(?:\n|$)/,html:"^ {0,3}(?:<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n+|$)|comment[^\\n]*(\\n+|$)|<\\?[\\s\\S]*?(?:\\?>\\n*|$)|<![A-Z][\\s\\S]*?(?:>\\n*|$)|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>\\n*|$)|</?(tag)(?: +|\\n|/?>)[\\s\\S]*?(?:(?:\\n *)+\\n|$)|<(?!script|pre|style|textarea)([a-z][\\w-]*)(?:attribute)*? */?>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$)|</(?!script|pre|style|textarea)[a-z][\\w-]*\\s*>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$))",def:/^ {0,3}\[(label)\]: *(?:\n *)?<?([^\s>]+)>?(?:(?: +(?:\n *)?| *\n *)(title))? *(?:\n+|$)/,table:P,lheading:/^([^\n]+)\n {0,3}(=+|-+) *(?:\n+|$)/,_paragraph:/^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table| +\n)[^\n]+)*)/,text:/^[^\n]+/};d._label=/(?!\s*\])(?:\\.|[^\[\]\\])+/;d._title=/(?:"(?:\\"?|[^"\\])*"|'[^'\n]*(?:\n[^'\n]+)*\n?'|\([^()]*\))/;d.def=f(d.def).replace("label",d._label).replace("title",d._title).getRegex();d.bullet=/(?:[*+-]|\d{1,9}[.)])/;d.listItemStart=f(/^( *)(bull) */).replace("bull",d.bullet).getRegex();d.list=f(d.list).replace(/bull/g,d.bullet).replace("hr","\\n+(?=\\1?(?:(?:- *){3,}|(?:_ *){3,}|(?:\\* *){3,})(?:\\n+|$))").replace("def","\\n+(?="+d.def.source+")").getRegex();d._tag="address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul";d._comment=/<!--(?!-?>)[\s\S]*?(?:-->|$)/;d.html=f(d.html,"i").replace("comment",d._comment).replace("tag",d._tag).replace("attribute",/ +[a-zA-Z:_][\w.:-]*(?: *= *"[^"\n]*"| *= *'[^'\n]*'| *= *[^\s"'=<>`]+)?/).getRegex();d.paragraph=f(d._paragraph).replace("hr",d.hr).replace("heading"," {0,3}#{1,6} ").replace("|lheading","").replace("|table","").replace("blockquote"," {0,3}>").replace("fences"," {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list"," {0,3}(?:[*+-]|1[.)]) ").replace("html","</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag",d._tag).getRegex();d.blockquote=f(d.blockquote).replace("paragraph",d.paragraph).getRegex();d.normal=R({},d);d.gfm=R({},d.normal,{table:"^ *([^\\n ].*\\|.*)\\n {0,3}(?:\\| *)?(:?-+:? *(?:\\| *:?-+:? *)*)(?:\\| *)?(?:\\n((?:(?! *\\n|hr|heading|blockquote|code|fences|list|html).*(?:\\n|$))*)\\n*|$)"});d.gfm.table=f(d.gfm.table).replace("hr",d.hr).replace("heading"," {0,3}#{1,6} ").replace("blockquote"," {0,3}>").replace("code"," {4}[^\\n]").replace("fences"," {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list"," {0,3}(?:[*+-]|1[.)]) ").replace("html","</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag",d._tag).getRegex();d.gfm.paragraph=f(d._paragraph).replace("hr",d.hr).replace("heading"," {0,3}#{1,6} ").replace("|lheading","").replace("table",d.gfm.table).replace("blockquote"," {0,3}>").replace("fences"," {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n").replace("list"," {0,3}(?:[*+-]|1[.)]) ").replace("html","</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)").replace("tag",d._tag).getRegex();d.pedantic=R({},d.normal,{html:f(`^ *(?:comment *(?:\\n|\\s*$)|<(tag)[\\s\\S]+?</\\1> *(?:\\n{2,}|\\s*$)|<tag(?:"[^"]*"|'[^']*'|\\s[^'"/>\\s]*)*?/?> *(?:\\n{2,}|\\s*$))`).replace("comment",d._comment).replace(/tag/g,"(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\\b)\\w+(?!:|[^\\w\\s@]*@)\\b").getRegex(),def:/^ *\[([^\]]+)\]: *<?([^\s>]+)>?(?: +(["(][^\n]+[")]))? *(?:\n+|$)/,heading:/^(#{1,6})(.*)(?:\n+|$)/,fences:P,paragraph:f(d.normal._paragraph).replace("hr",d.hr).replace("heading",` *#{1,6} *[^
+]`).replace("lheading",d.lheading).replace("blockquote"," {0,3}>").replace("|fences","").replace("|list","").replace("|html","").getRegex()});var p={escape:/^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/,autolink:/^<(scheme:[^\s\x00-\x1f<>]*|email)>/,url:P,tag:"^comment|^</[a-zA-Z][\\w:-]*\\s*>|^<[a-zA-Z][\\w-]*(?:attribute)*?\\s*/?>|^<\\?[\\s\\S]*?\\?>|^<![a-zA-Z]+\\s[\\s\\S]*?>|^<!\\[CDATA\\[[\\s\\S]*?\\]\\]>",link:/^!?\[(label)\]\(\s*(href)(?:\s+(title))?\s*\)/,reflink:/^!?\[(label)\]\[(ref)\]/,nolink:/^!?\[(ref)\](?:\[\])?/,reflinkSearch:"reflink|nolink(?!\\()",emStrong:{lDelim:/^(?:\*+(?:([punct_])|[^\s*]))|^_+(?:([punct*])|([^\s_]))/,rDelimAst:/^[^_*]*?\_\_[^_*]*?\*[^_*]*?(?=\_\_)|[punct_](\*+)(?=[\s]|$)|[^punct*_\s](\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|[^punct*_\s](\*+)(?=[^punct*_\s])/,rDelimUnd:/^[^_*]*?\*\*[^_*]*?\_[^_*]*?(?=\*\*)|[punct*](\_+)(?=[\s]|$)|[^punct*_\s](\_+)(?=[punct*\s]|$)|[punct*\s](\_+)(?=[^punct*_\s])|[\s](\_+)(?=[punct*])|[punct*](\_+)(?=[punct*])/},code:/^(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/,br:/^( {2,}|\\)\n(?!\s*$)/,del:P,text:/^(`+|[^`])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<!\[`*_]|\b_|$)|[^ ](?= {2,}\n)))/,punctuation:/^([\spunctuation])/};p._punctuation="!\"#$%&'()+\\-.,/:;<=>?@\\[\\]`^{|}~";p.punctuation=f(p.punctuation).replace(/punctuation/g,p._punctuation).getRegex();p.blockSkip=/\[[^\]]*?\]\([^\)]*?\)|`[^`]*?`|<[^>]*?>/g;p.escapedEmSt=/\\\*|\\_/g;p._comment=f(d._comment).replace("(?:-->|$)","-->").getRegex();p.emStrong.lDelim=f(p.emStrong.lDelim).replace(/punct/g,p._punctuation).getRegex();p.emStrong.rDelimAst=f(p.emStrong.rDelimAst,"g").replace(/punct/g,p._punctuation).getRegex();p.emStrong.rDelimUnd=f(p.emStrong.rDelimUnd,"g").replace(/punct/g,p._punctuation).getRegex();p._escapes=/\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/g;p._scheme=/[a-zA-Z][a-zA-Z0-9+.-]{1,31}/;p._email=/[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+(@)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?![-_])/;p.autolink=f(p.autolink).replace("scheme",p._scheme).replace("email",p._email).getRegex();p._attribute=/\s+[a-zA-Z:_][\w.:-]*(?:\s*=\s*"[^"]*"|\s*=\s*'[^']*'|\s*=\s*[^\s"'=<>`]+)?/;p.tag=f(p.tag).replace("comment",p._comment).replace("attribute",p._attribute).getRegex();p._label=/(?:\[(?:\\.|[^\[\]\\])*\]|\\.|`[^`]*`|[^\[\]\\`])*?/;p._href=/<(?:\\.|[^\n<>\\])+>|[^\s\x00-\x1f]*/;p._title=/"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/;p.link=f(p.link).replace("label",p._label).replace("href",p._href).replace("title",p._title).getRegex();p.reflink=f(p.reflink).replace("label",p._label).replace("ref",d._label).getRegex();p.nolink=f(p.nolink).replace("ref",d._label).getRegex();p.reflinkSearch=f(p.reflinkSearch,"g").replace("reflink",p.reflink).replace("nolink",p.nolink).getRegex();p.normal=R({},p);p.pedantic=R({},p.normal,{strong:{start:/^__|\*\*/,middle:/^__(?=\S)([\s\S]*?\S)__(?!_)|^\*\*(?=\S)([\s\S]*?\S)\*\*(?!\*)/,endAst:/\*\*(?!\*)/g,endUnd:/__(?!_)/g},em:{start:/^_|\*/,middle:/^()\*(?=\S)([\s\S]*?\S)\*(?!\*)|^_(?=\S)([\s\S]*?\S)_(?!_)/,endAst:/\*(?!\*)/g,endUnd:/_(?!_)/g},link:f(/^!?\[(label)\]\((.*?)\)/).replace("label",p._label).getRegex(),reflink:f(/^!?\[(label)\]\s*\[([^\]]*)\]/).replace("label",p._label).getRegex()});p.gfm=R({},p.normal,{escape:f(p.escape).replace("])","~|])").getRegex(),_extended_email:/[A-Za-z0-9._+-]+(@)[a-zA-Z0-9-_]+(?:\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![-_])/,url:/^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/,_backpedal:/(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/,del:/^(~~?)(?=[^\s~])([\s\S]*?[^\s~])\1(?=[^~]|$)/,text:/^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/});p.gfm.url=f(p.gfm.url,"i").replace("email",p.gfm._extended_email).getRegex();p.breaks=R({},p.gfm,{br:f(p.br).replace("{2,}","*").getRegex(),text:f(p.gfm.text).replace("\\b_","\\b_| {2,}\\n").replace(/\{2,\}/g,"*").getRegex()});function Ae(o){return o.replace(/---/g,"\u2014").replace(/--/g,"\u2013").replace(/(^|[-\u2014/(\[{"\s])'/g,"$1\u2018").replace(/'/g,"\u2019").replace(/(^|[-\u2014/(\[{\u2018\s])"/g,"$1\u201C").replace(/"/g,"\u201D").replace(/\.{3}/g,"\u2026")}function ae(o){let e="",n,t,a=o.length;for(n=0;n<a;n++)t=o.charCodeAt(n),Math.random()>.5&&(t="x"+t.toString(16)),e+="&#"+t+";";return e}var v=class{constructor(e){this.tokens=[],this.tokens.links=Object.create(null),this.options=e||D,this.options.tokenizer=this.options.tokenizer||new Z,this.tokenizer=this.options.tokenizer,this.tokenizer.options=this.options,this.tokenizer.lexer=this,this.inlineQueue=[],this.state={inLink:!1,inRawBlock:!1,top:!0};let n={block:d.normal,inline:p.normal};this.options.pedantic?(n.block=d.pedantic,n.inline=p.pedantic):this.options.gfm&&(n.block=d.gfm,this.options.breaks?n.inline=p.breaks:n.inline=p.gfm),this.tokenizer.rules=n}static get rules(){return{block:d,inline:p}}static lex(e,n){return new v(n).lex(e)}static lexInline(e,n){return new v(n).inlineTokens(e)}lex(e){e=e.replace(/\r\n|\r/g,`
+`).replace(/\t/g,"    "),this.blockTokens(e,this.tokens);let n;for(;n=this.inlineQueue.shift();)this.inlineTokens(n.src,n.tokens);return this.tokens}blockTokens(e,n=[]){this.options.pedantic&&(e=e.replace(/^ +$/gm,""));let t,a,i,r;for(;e;)if(!(this.options.extensions&&this.options.extensions.block&&this.options.extensions.block.some(s=>(t=s.call({lexer:this},e,n))?(e=e.substring(t.raw.length),n.push(t),!0):!1))){if(t=this.tokenizer.space(e)){e=e.substring(t.raw.length),t.raw.length===1&&n.length>0?n[n.length-1].raw+=`
+`:n.push(t);continue}if(t=this.tokenizer.code(e)){e=e.substring(t.raw.length),a=n[n.length-1],a&&(a.type==="paragraph"||a.type==="text")?(a.raw+=`
+`+t.raw,a.text+=`
+`+t.text,this.inlineQueue[this.inlineQueue.length-1].src=a.text):n.push(t);continue}if(t=this.tokenizer.fences(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.heading(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.hr(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.blockquote(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.list(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.html(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.def(e)){e=e.substring(t.raw.length),a=n[n.length-1],a&&(a.type==="paragraph"||a.type==="text")?(a.raw+=`
+`+t.raw,a.text+=`
+`+t.raw,this.inlineQueue[this.inlineQueue.length-1].src=a.text):this.tokens.links[t.tag]||(this.tokens.links[t.tag]={href:t.href,title:t.title});continue}if(t=this.tokenizer.table(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.lheading(e)){e=e.substring(t.raw.length),n.push(t);continue}if(i=e,this.options.extensions&&this.options.extensions.startBlock){let s=1/0,l=e.slice(1),c;this.options.extensions.startBlock.forEach(function(h){c=h.call({lexer:this},l),typeof c=="number"&&c>=0&&(s=Math.min(s,c))}),s<1/0&&s>=0&&(i=e.substring(0,s+1))}if(this.state.top&&(t=this.tokenizer.paragraph(i))){a=n[n.length-1],r&&a.type==="paragraph"?(a.raw+=`
+`+t.raw,a.text+=`
+`+t.text,this.inlineQueue.pop(),this.inlineQueue[this.inlineQueue.length-1].src=a.text):n.push(t),r=i.length!==e.length,e=e.substring(t.raw.length);continue}if(t=this.tokenizer.text(e)){e=e.substring(t.raw.length),a=n[n.length-1],a&&a.type==="text"?(a.raw+=`
+`+t.raw,a.text+=`
+`+t.text,this.inlineQueue.pop(),this.inlineQueue[this.inlineQueue.length-1].src=a.text):n.push(t);continue}if(e){let s="Infinite loop on byte: "+e.charCodeAt(0);if(this.options.silent){console.error(s);break}else throw new Error(s)}}return this.state.top=!0,n}inline(e,n){this.inlineQueue.push({src:e,tokens:n})}inlineTokens(e,n=[]){let t,a,i,r=e,s,l,c;if(this.tokens.links){let h=Object.keys(this.tokens.links);if(h.length>0)for(;(s=this.tokenizer.rules.inline.reflinkSearch.exec(r))!=null;)h.includes(s[0].slice(s[0].lastIndexOf("[")+1,-1))&&(r=r.slice(0,s.index)+"["+te("a",s[0].length-2)+"]"+r.slice(this.tokenizer.rules.inline.reflinkSearch.lastIndex))}for(;(s=this.tokenizer.rules.inline.blockSkip.exec(r))!=null;)r=r.slice(0,s.index)+"["+te("a",s[0].length-2)+"]"+r.slice(this.tokenizer.rules.inline.blockSkip.lastIndex);for(;(s=this.tokenizer.rules.inline.escapedEmSt.exec(r))!=null;)r=r.slice(0,s.index)+"++"+r.slice(this.tokenizer.rules.inline.escapedEmSt.lastIndex);for(;e;)if(l||(c=""),l=!1,!(this.options.extensions&&this.options.extensions.inline&&this.options.extensions.inline.some(h=>(t=h.call({lexer:this},e,n))?(e=e.substring(t.raw.length),n.push(t),!0):!1))){if(t=this.tokenizer.escape(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.tag(e)){e=e.substring(t.raw.length),a=n[n.length-1],a&&t.type==="text"&&a.type==="text"?(a.raw+=t.raw,a.text+=t.text):n.push(t);continue}if(t=this.tokenizer.link(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.reflink(e,this.tokens.links)){e=e.substring(t.raw.length),a=n[n.length-1],a&&t.type==="text"&&a.type==="text"?(a.raw+=t.raw,a.text+=t.text):n.push(t);continue}if(t=this.tokenizer.emStrong(e,r,c)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.codespan(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.br(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.del(e)){e=e.substring(t.raw.length),n.push(t);continue}if(t=this.tokenizer.autolink(e,ae)){e=e.substring(t.raw.length),n.push(t);continue}if(!this.state.inLink&&(t=this.tokenizer.url(e,ae))){e=e.substring(t.raw.length),n.push(t);continue}if(i=e,this.options.extensions&&this.options.extensions.startInline){let h=1/0,w=e.slice(1),k;this.options.extensions.startInline.forEach(function(m){k=m.call({lexer:this},w),typeof k=="number"&&k>=0&&(h=Math.min(h,k))}),h<1/0&&h>=0&&(i=e.substring(0,h+1))}if(t=this.tokenizer.inlineText(i,Ae)){e=e.substring(t.raw.length),t.raw.slice(-1)!=="_"&&(c=t.raw.slice(-1)),l=!0,a=n[n.length-1],a&&a.type==="text"?(a.raw+=t.raw,a.text+=t.text):n.push(t);continue}if(e){let h="Infinite loop on byte: "+e.charCodeAt(0);if(this.options.silent){console.error(h);break}else throw new Error(h)}}return n}},W=class{constructor(e){this.options=e||D}code(e,n,t){let a=(n||"").match(/\S*/)[0];if(this.options.highlight){let i=this.options.highlight(e,a);i!=null&&i!==e&&(t=!0,e=i)}return e=e.replace(/\n$/,"")+`
+`,a?'<pre><code class="'+this.options.langPrefix+x(a,!0)+'">'+(t?e:x(e,!0))+`</code></pre>
+`:"<pre><code>"+(t?e:x(e,!0))+`</code></pre>
+`}blockquote(e){return`<blockquote>
+`+e+`</blockquote>
+`}html(e){return e}heading(e,n,t,a){return this.options.headerIds?"<h"+n+' id="'+this.options.headerPrefix+a.slug(t)+'">'+e+"</h"+n+`>
+`:"<h"+n+">"+e+"</h"+n+`>
+`}hr(){return this.options.xhtml?`<hr/>
+`:`<hr>
+`}list(e,n,t){let a=n?"ol":"ul",i=n&&t!==1?' start="'+t+'"':"";return"<"+a+i+`>
+`+e+"</"+a+`>
+`}listitem(e){return"<li>"+e+`</li>
+`}checkbox(e){return"<input "+(e?'checked="" ':"")+'disabled="" type="checkbox"'+(this.options.xhtml?" /":"")+"> "}paragraph(e){return"<p>"+e+`</p>
+`}table(e,n){return n&&(n="<tbody>"+n+"</tbody>"),`<table>
+<thead>
+`+e+`</thead>
+`+n+`</table>
+`}tablerow(e){return`<tr>
+`+e+`</tr>
+`}tablecell(e,n){let t=n.header?"th":"td";return(n.align?"<"+t+' align="'+n.align+'">':"<"+t+">")+e+"</"+t+`>
+`}strong(e){return"<strong>"+e+"</strong>"}em(e){return"<em>"+e+"</em>"}codespan(e){return"<code>"+e+"</code>"}br(){return this.options.xhtml?"<br/>":"<br>"}del(e){return"<del>"+e+"</del>"}link(e,n,t){if(e=K(this.options.sanitize,this.options.baseUrl,e),e===null)return t;let a='<a href="'+x(e)+'"';return n&&(a+=' title="'+n+'"'),a+=">"+t+"</a>",a}image(e,n,t){if(e=K(this.options.sanitize,this.options.baseUrl,e),e===null)return t;let a='<img src="'+e+'" alt="'+t+'"';return n&&(a+=' title="'+n+'"'),a+=this.options.xhtml?"/>":">",a}text(e){return e}},F=class{strong(e){return e}em(e){return e}codespan(e){return e}del(e){return e}html(e){return e}text(e){return e}link(e,n,t){return""+t}image(e,n,t){return""+t}br(){return""}},Q=class{constructor(){this.seen={}}serialize(e){return e.toLowerCase().trim().replace(/<[!\/a-z].*?>/ig,"").replace(/[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g,"").replace(/\s/g,"-")}getNextSafeSlug(e,n){let t=e,a=0;if(this.seen.hasOwnProperty(t)){a=this.seen[e];do a++,t=e+"-"+a;while(this.seen.hasOwnProperty(t))}return n||(this.seen[e]=a,this.seen[t]=0),t}slug(e,n={}){let t=this.serialize(e);return this.getNextSafeSlug(t,n.dryrun)}},_=class{constructor(e){this.options=e||D,this.options.renderer=this.options.renderer||new W,this.renderer=this.options.renderer,this.renderer.options=this.options,this.textRenderer=new F,this.slugger=new Q}static parse(e,n){return new _(n).parse(e)}static parseInline(e,n){return new _(n).parseInline(e)}parse(e,n=!0){let t="",a,i,r,s,l,c,h,w,k,m,M,y,$,b,C,L,j,S,z,O=e.length;for(a=0;a<O;a++){if(m=e[a],this.options.extensions&&this.options.extensions.renderers&&this.options.extensions.renderers[m.type]&&(z=this.options.extensions.renderers[m.type].call({parser:this},m),z!==!1||!["space","hr","heading","code","table","blockquote","list","html","paragraph","text"].includes(m.type))){t+=z||"";continue}switch(m.type){case"space":continue;case"hr":{t+=this.renderer.hr();continue}case"heading":{t+=this.renderer.heading(this.parseInline(m.tokens),m.depth,oe(this.parseInline(m.tokens,this.textRenderer)),this.slugger);continue}case"code":{t+=this.renderer.code(m.text,m.lang,m.escaped);continue}case"table":{for(w="",h="",s=m.header.length,i=0;i<s;i++)h+=this.renderer.tablecell(this.parseInline(m.header[i].tokens),{header:!0,align:m.align[i]});for(w+=this.renderer.tablerow(h),k="",s=m.rows.length,i=0;i<s;i++){for(c=m.rows[i],h="",l=c.length,r=0;r<l;r++)h+=this.renderer.tablecell(this.parseInline(c[r].tokens),{header:!1,align:m.align[r]});k+=this.renderer.tablerow(h)}t+=this.renderer.table(w,k);continue}case"blockquote":{k=this.parse(m.tokens),t+=this.renderer.blockquote(k);continue}case"list":{for(M=m.ordered,y=m.start,$=m.loose,s=m.items.length,k="",i=0;i<s;i++)C=m.items[i],L=C.checked,j=C.task,b="",C.task&&(S=this.renderer.checkbox(L),$?C.tokens.length>0&&C.tokens[0].type==="paragraph"?(C.tokens[0].text=S+" "+C.tokens[0].text,C.tokens[0].tokens&&C.tokens[0].tokens.length>0&&C.tokens[0].tokens[0].type==="text"&&(C.tokens[0].tokens[0].text=S+" "+C.tokens[0].tokens[0].text)):C.tokens.unshift({type:"text",text:S}):b+=S),b+=this.parse(C.tokens,$),k+=this.renderer.listitem(b,j,L);t+=this.renderer.list(k,M,y);continue}case"html":{t+=this.renderer.html(m.text);continue}case"paragraph":{t+=this.renderer.paragraph(this.parseInline(m.tokens));continue}case"text":{for(k=m.tokens?this.parseInline(m.tokens):m.text;a+1<O&&e[a+1].type==="text";)m=e[++a],k+=`
+`+(m.tokens?this.parseInline(m.tokens):m.text);t+=n?this.renderer.paragraph(k):k;continue}default:{let B='Token with "'+m.type+'" type was not found.';if(this.options.silent){console.error(B);return}else throw new Error(B)}}}return t}parseInline(e,n){n=n||this.renderer;let t="",a,i,r,s=e.length;for(a=0;a<s;a++){if(i=e[a],this.options.extensions&&this.options.extensions.renderers&&this.options.extensions.renderers[i.type]&&(r=this.options.extensions.renderers[i.type].call({parser:this},i),r!==!1||!["escape","html","link","image","strong","em","codespan","br","del","text"].includes(i.type))){t+=r||"";continue}switch(i.type){case"escape":{t+=n.text(i.text);break}case"html":{t+=n.html(i.text);break}case"link":{t+=n.link(i.href,i.title,this.parseInline(i.tokens,n));break}case"image":{t+=n.image(i.href,i.title,i.text);break}case"strong":{t+=n.strong(this.parseInline(i.tokens,n));break}case"em":{t+=n.em(this.parseInline(i.tokens,n));break}case"codespan":{t+=n.codespan(i.text);break}case"br":{t+=n.br();break}case"del":{t+=n.del(this.parseInline(i.tokens,n));break}case"text":{t+=n.text(i.text);break}default:{let l='Token with "'+i.type+'" type was not found.';if(this.options.silent){console.error(l);return}else throw new Error(l)}}}return t}};function g(o,e,n){if(typeof o>"u"||o===null)throw new Error("marked(): input parameter is undefined or null");if(typeof o!="string")throw new Error("marked(): input parameter is of type "+Object.prototype.toString.call(o)+", string expected");if(typeof e=="function"&&(n=e,e=null),e=R({},g.defaults,e||{}),re(e),n){let t=e.highlight,a;try{a=v.lex(o,e)}catch(s){return n(s)}let i=function(s){let l;if(!s)try{e.walkTokens&&g.walkTokens(a,e.walkTokens),l=_.parse(a,e)}catch(c){s=c}return e.highlight=t,s?n(s):n(null,l)};if(!t||t.length<3||(delete e.highlight,!a.length))return i();let r=0;g.walkTokens(a,function(s){s.type==="code"&&(r++,setTimeout(()=>{t(s.text,s.lang,function(l,c){if(l)return i(l);c!=null&&c!==s.text&&(s.text=c,s.escaped=!0),r--,r===0&&i()})},0))}),r===0&&i();return}try{let t=v.lex(o,e);return e.walkTokens&&g.walkTokens(t,e.walkTokens),_.parse(t,e)}catch(t){if(t.message+=`
+Please report this to https://github.com/markedjs/marked.`,e.silent)return"<p>An error occurred:</p><pre>"+x(t.message+"",!0)+"</pre>";throw t}}g.options=g.setOptions=function(o){return R(g.defaults,o),ge(g.defaults),g};g.getDefaults=ie;g.defaults=D;g.use=function(...o){let e=R({},...o),n=g.defaults.extensions||{renderers:{},childTokens:{}},t;o.forEach(a=>{if(a.extensions&&(t=!0,a.extensions.forEach(i=>{if(!i.name)throw new Error("extension name required");if(i.renderer){let r=n.renderers?n.renderers[i.name]:null;r?n.renderers[i.name]=function(...s){let l=i.renderer.apply(this,s);return l===!1&&(l=r.apply(this,s)),l}:n.renderers[i.name]=i.renderer}if(i.tokenizer){if(!i.level||i.level!=="block"&&i.level!=="inline")throw new Error("extension level must be 'block' or 'inline'");n[i.level]?n[i.level].unshift(i.tokenizer):n[i.level]=[i.tokenizer],i.start&&(i.level==="block"?n.startBlock?n.startBlock.push(i.start):n.startBlock=[i.start]:i.level==="inline"&&(n.startInline?n.startInline.push(i.start):n.startInline=[i.start]))}i.childTokens&&(n.childTokens[i.name]=i.childTokens)})),a.renderer){let i=g.defaults.renderer||new W;for(let r in a.renderer){let s=i[r];i[r]=(...l)=>{let c=a.renderer[r].apply(i,l);return c===!1&&(c=s.apply(i,l)),c}}e.renderer=i}if(a.tokenizer){let i=g.defaults.tokenizer||new Z;for(let r in a.tokenizer){let s=i[r];i[r]=(...l)=>{let c=a.tokenizer[r].apply(i,l);return c===!1&&(c=s.apply(i,l)),c}}e.tokenizer=i}if(a.walkTokens){let i=g.defaults.walkTokens;e.walkTokens=function(r){a.walkTokens.call(this,r),i&&i.call(this,r)}}t&&(e.extensions=n),g.setOptions(e)})};g.walkTokens=function(o,e){for(let n of o)switch(e.call(g,n),n.type){case"table":{for(let t of n.header)g.walkTokens(t.tokens,e);for(let t of n.rows)for(let a of t)g.walkTokens(a.tokens,e);break}case"list":{g.walkTokens(n.items,e);break}default:g.defaults.extensions&&g.defaults.extensions.childTokens&&g.defaults.extensions.childTokens[n.type]?g.defaults.extensions.childTokens[n.type].forEach(function(t){g.walkTokens(n[t],e)}):n.tokens&&g.walkTokens(n.tokens,e)}};g.parseInline=function(o,e){if(typeof o>"u"||o===null)throw new Error("marked.parseInline(): input parameter is undefined or null");if(typeof o!="string")throw new Error("marked.parseInline(): input parameter is of type "+Object.prototype.toString.call(o)+", string expected");e=R({},g.defaults,e||{}),re(e);try{let n=v.lexInline(o,e);return e.walkTokens&&g.walkTokens(n,e.walkTokens),_.parseInline(n,e)}catch(n){if(n.message+=`
+Please report this to https://github.com/markedjs/marked.`,e.silent)return"<p>An error occurred:</p><pre>"+x(n.message+"",!0)+"</pre>";throw n}};g.Parser=_;g.parser=_.parse;g.Renderer=W;g.TextRenderer=F;g.Lexer=v;g.lexer=v.lex;g.Tokenizer=Z;g.Slugger=Q;g.parse=g;var Ee=g.options,Oe=g.setOptions,qe=g.use,Ne=g.walkTokens,Pe=g.parseInline;var Ze=_.parse,We=v.lex;var H=class{#e=null;#t=null;constructor(e){this.#e=e.Getter,this.#t=e.Setter}setReactive(e){typeof this.#e!="function"&&(this.#e=()=>{}),typeof this.#t!="function"&&(this.#e=()=>{});let n=this.#e,t=this.#t;return new Proxy(e,{get(i,r){return n(i,r)||i[r]},set(i,r,s){return typeof s=="function"?e[r]=s(i,r,s)||null:e[r]=s,t(i,r,s),1}})}};var G=class{#allComponentId={};#kindOfComponentBindingData={};createRawComponent(o,e){return{name:o,content:e?.content,attribute:e?.attribute,parentComponent:e?.parentComponent,positionComponent:e?.positionComponent,state:e?.state||{},event:e?.event||{},id:e?.id}}createComponent(rawComponent,embedData={}){let element=document.createElement(rawComponent.name);if(rawComponent?.attribute instanceof Object)for(let o in rawComponent?.attribute)element.setAttribute(o,rawComponent?.attribute[o]);let textNode=document.createTextNode(rawComponent?.content);return element.appendChild(textNode),{element,content:textNode,rawContent:rawComponent?.content,parent:rawComponent.parentComponent,position:rawComponent.positionComponent,state:rawComponent?.state,event:rawComponent?.event,...embedData,destroy(o=()=>{}){o(),element.remove()},updateTextNode(){let text=this.rawContent,resultText=eval(text);this.content.replaceData(0,text.length,resultText)},updateAttribute(){}}}renderComponent(o,e,n={}){let t=[],a={},i=this.#kindOfComponentBindingData;for(let s of o){let l=this.createComponent(s,n);if(a={...a,...l.state},s?.id&&(this.#allComponentId[s?.id]={...l,state:new H({Getter(c,h){return c[h]},Setter(c,h,w){for(let k of i[h])k.state[h]=w,k.updateTextNode()}}).setReactive(a)}),s?.event instanceof Object)for(let c in s?.event)l.element[c]=()=>s?.event[c]({state:new H({Getter(h,w){return h[w]},Setter(h,w,k){for(let m of i[w])m.state[w]=k,m.updateTextNode()}}).setReactive(a)});for(let c of Object.keys(l.state))i[c]instanceof Array||(i[c]=[]),i[c].push(l);t.push(l)}let r={};for(let s of t)s.updateTextNode(),r[s.position]?r[s.position].appendChild(s.element):(r[s.position]=s.element,r[s.parent]&&r[s.parent].appendChild(s.element));return e instanceof HTMLElement&&e.appendChild(r[Object.keys(r)[0]]),{destroy:t[0].destroy,component:t[0],state:new H({Getter(s,l){return s[l]},Setter(s,l,c){for(let h of i[l])h.state[l]=c,h.updateTextNode()}}).setReactive(a),updateComponentRendered(){for(let s of t)s.updateTextNode()}}}replaceChild(o,e){e.parentElement.replaceChild(o.element,e)}findById(o){return this.#allComponentId[o]}};var u=new G;function V(o){return u.findById(o)}function A(o,e,n){return{...u.renderComponent(o,e,n),updateComponentProperty(t,a){let i=u.renderComponent(t(a),void 0,n);u.replaceChild(i.component,this.component.element)}}}var se=class{#e=[];#t=null;constructor(){window.addEventListener("DOMContentLoaded",()=>{document.body.onclick=e=>{e.target.matches("[data-link]")&&(e.preventDefault(),this.navigateTo(e.target.href))}}),window.onpopstate=()=>{this.render()}}navigateTo(e){history.pushState(null,null,e),this.render()}addNewRouter(e,n){this.#e.push({path:e,event:n,isMatch:!1})}matchRoute(e){return location.pathname===e}updateRouteHandler(){let e=this.matchRoute;this.#e=this.#e.map(n=>({path:n.path,event:n.event,isMatch:e(n.path)}))}render(){this.updateRouteHandler();let e=this.#e.find(n=>n.isMatch);e||(e={path:location.pathname,event:()=>{console.log("page not found")},isMatch:!0}),this.#t instanceof Object?(this.#t.destroy(),this.#t=e.event()):this.#t=e.event()}routeTo(e,n){this.addNewRouter(e,n)}},E={SPA:new se,route({path:o,component:e,data:n={},target:t=()=>{},onrender:a=()=>{}}){this.SPA.routeTo(o,()=>{let i=A(e,t(),n);return a(i),i}),this.SPA.render()}};function I({parentcomponent:o,positioncomponent:e,$class:n,$id:t=0}){return[u.createRawComponent("div",{content:"``",parentComponent:o,positionComponent:e,state:{},event:{},attribute:{class:n+" smc-card"},id:""})]}function U({parentcomponent:o,positioncomponent:e,$class:n,$id:t=0}){return[u.createRawComponent("div",{content:"`                            `",parentComponent:o,positionComponent:e,state:{},event:{},attribute:{class:n+" smc-chips smc-ripple"},id:""}),u.createRawComponent("div",{content:"``",parentComponent:e,positionComponent:"6000878540004060a200197000000909"+t,state:{},event:{},attribute:{class:"ripple"},id:""})]}function X(){try{Array.from(document.querySelectorAll(".smc-ripple")).forEach(e=>{let n;e.addEventListener("mousedown",t=>{clearTimeout(n);let a=e.querySelector(".ripple"),i=e.offsetWidth,r=e.getBoundingClientRect(),s=t.pageX-r.left-i,l=t.pageY-r.top-i-window.scrollY;a.style="top:"+l+"px; left:"+s+"px; width: "+i*2+"px; height: "+i*2+"px;",a.classList?.remove("active"),a.classList?.remove("start"),setTimeout(()=>{a.classList?.add("start"),setTimeout(()=>{a.classList?.add("active")})})}),e.addEventListener("mouseup",t=>{let a=e.querySelector(".ripple");clearTimeout(n),n=setTimeout(()=>{a.classList?.remove("active"),a.classList?.remove("start")},500)})})}catch{}}function T({parentcomponent:o,positioncomponent:e}){return[u.createRawComponent("div",{content:"`                            `",parentComponent:o,positionComponent:e,state:{},event:{},attribute:{class:"navbar"},id:""}),u.createRawComponent("div",{content:"`                                                                                                                    `",parentComponent:e,positionComponent:"15590058101048208081120060903688",state:{},event:{},attribute:{class:"action"},id:""}),u.createRawComponent("a",{content:"`                        Home                    `",parentComponent:"15590058101048208081120060903688",positionComponent:"40020505801740328300550000002640",state:{},event:{},attribute:{href:"/","data-link":""},id:""}),u.createRawComponent("a",{content:"`                        Docs                    `",parentComponent:"15590058101048208081120060903688",positionComponent:"1484940813404547b230138010703109",state:{},event:{},attribute:{href:"/docs","data-link":""},id:""}),u.createRawComponent("a",{content:"`                        API                    `",parentComponent:"15590058101048208081120060903688",positionComponent:"41407005180040608059540940900000",state:{},event:{},attribute:{href:"/api","data-link":""},id:""}),u.createRawComponent("a",{content:"`                        Config                    `",parentComponent:"15590058101048208081120060903688",positionComponent:"15020855001145019078184007443305",state:{},event:{},attribute:{href:"/config","data-link":""},id:""}),u.createRawComponent("a",{content:"`Github`",parentComponent:"15590058101048208081120060903688",positionComponent:"5900400617904556a006700034445620",state:{},event:{},attribute:{href:"https://github.com/daberpro/dabCom"},id:""})]}function le({parentcomponent:o,positioncomponent:e}){return[u.createRawComponent("div",{content:"`                                                            `",parentComponent:"",positionComponent:"04104460360440108800804704090860",state:{},event:{},attribute:{class:"main-content"},id:""}),...T({$id:"07225600190448918205110706304800",parentcomponent:"04104460360440108800804704090860",positioncomponent:"46020074804040508001106070017008"}),u.createRawComponent("div",{content:"`                `",parentComponent:"04104460360440108800804704090860",positionComponent:"1000778110004965b045106153106740",state:{},event:{},attribute:{class:"left"},id:"shortContent"}),u.createRawComponent("div",{content:"`                                    `",parentComponent:"04104460360440108800804704090860",positionComponent:"3801587515004007a000725000003805",state:{},event:{},attribute:{class:"right"},id:"allContent"})]}function pe({parentcomponent:o,positioncomponent:e}){return[u.createRawComponent("div",{content:"`                                                            `",parentComponent:"",positionComponent:"10010487204140008001182049013502",state:{},event:{},attribute:{class:"main-content"},id:""}),...T({$id:"95000803684940578007600004027277",parentcomponent:"10010487204140008001182049013502",positioncomponent:"7590000010464058b009820000000550"}),u.createRawComponent("div",{content:"`                `",parentComponent:"10010487204140008001182049013502",positionComponent:"10300000740040659670409089002069",state:{},event:{},attribute:{class:"left"},id:"shortContent"}),u.createRawComponent("div",{content:"`                                    `",parentComponent:"10010487204140008001182049013502",positionComponent:"4002559410304500a050920900046566",state:{},event:{},attribute:{class:"right"},id:"allContent"})]}function ue({parentcomponent:o,positioncomponent:e}){return[u.createRawComponent("div",{content:"`                                                            `",parentComponent:"",positionComponent:"1900063619944192a024100602050070",state:{},event:{},attribute:{class:"main-content"},id:""}),...T({$id:"10075100100546408750314000854996",parentcomponent:"1900063619944192a024100602050070",positioncomponent:"14036016505340908048401072007771"}),u.createRawComponent("div",{content:"`                `",parentComponent:"1900063619944192a024100602050070",positionComponent:"10260754003942888008100590702340",state:{},event:{},attribute:{class:"left"},id:"shortContent"}),u.createRawComponent("div",{content:"`                                    `",parentComponent:"1900063619944192a024100602050070",positionComponent:"04230000100640598003150045007470",state:{},event:{},attribute:{class:"right"},id:"allContent"})]}var ce=`# # Hello From Seleku\r
+this site create by seleku-kit and create by daberdev it self\r
+\r
+## # Apa itu seleku ?\r
+seleku adalah framework front end javascript yang berfokus kepada component dan pengembangan web3\r
+framework ini cukup simpel dan di tenagai oleh esbuild sebagai bundler nya\r
+\r
+## # kenapa seleku ?\r
+seleku memungkinkan anda untuk melakukan pembuatan component dari element html yang di tulis langsung\r
+di dalam sintaks javascript dan beberapa fitur lainya yang memungkinkan anda melakukan development\r
+khusus bagian frontend web, selain itu seleku di buat dengan sangat simpel dan seleku berjalan dengan dabcom library yang merupakan library utama dari seleku core system\r
+\r
+# # Getting Started\r
+## # instalasi dan requirement\r
+untuk menggunakan seleku-kit ada terlebih dahulu harus telah memahami dasar dari web development seperti\r
+**html**,**css**,**javascript** dan pemahaman tentang node js dan npm (node package manager)\r
+\r
+#### setup node js\r
+jika anda belum memiliki node js maka anda dapat mendownload di **[Download Node JS](https://nodejs.org)** setelah mendownload silahkan ikuti instruksi instalasi yang di berikan kemudian\r
+silahkan lakukan pengecekan apakah node js telah terinstall di lokal komputer anda dengan mengetikan\r
+\r
+\`\`\`bash\r
+node --version\r
+\`\`\`\r
+\r
+jika node js telah terinstall maka anda dapat melihat versi dari node js yang telah di install, jika anda\r
+telah menginstall node js maka anda juga akan secara otomatis menginstall npm (node package manager) yang akan kita gunakan untuk memanajement project seleku-kit maupun project javascript lainya\r
+\r
+untuk melihat versi npm jalankan perintah :\r
+\r
+\`\`\`bash\r
+npm --version\r
+\`\`\`\r
+\r
+kemudian untuk menginstall seleku template generator anda cukup menjalan kan perintah berikut\r
+\r
+\`\`\`bash\r
+npm i seleku-kit -g\r
+\`\`\`\r
+\r
+maka seleku akan di install secara global di komputer anda\r
+\r
+## # Membuat Project Pertama\r
+untuk membuat project pertama silahkan jalan kan \`seleku-kit\` di terminal atau command prompt anda maka\r
+anda akan di minta untuk memilih template apa yang akan anda gunakan\r
+kemudian anda akan di minta untuk memasukan nama project baru yang akan anda buat\r
+\r
+setelah anda membuat template project silahkan jalankan terminal atau command prompt anda di dalam folder\r
+project yang telah anda buat dengan mengetikan \`npm i\` kemudian anda jalankan \`npm run dev\` untuk menjalankan seleku-kit di mode development dan anda akan melihat bahwa seleku berjalan di lokal komputer anda dengan port default bawaan\r
+\r
+silahkan buka di web browser anda \`localhost:3000\` dan untuk melihat perubahan silahkan anda edit file\r
+\`main.selek\`\r
+\r
+# # Sintaks Dasar\r
+Seleku-kit memiliki sintaks yang merupakan gabungan dari HTML dan js sehingga bagi anda yang menggunakan react\r
+maka anda akan merasa familiar dengan sintaks yang ada untuk memulai mari kita pahami susunan sintaks\r
+\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+\r
+Render(<h1>Hello World</h1>,document.body);\r
+\r
+\`\`\`\r
+#### # Dasar - Dasar\r
+- pada bagian awal kita mengimport **dabMain** dan **Render**, \r
+apa itu dab main?, **dabMain** merupakan suatu Object yang memuat semua method dan property yang akan di butuhkan untuk membuat suatu component, \r
+sedangkan **Render** merupakan fungsi yang bertugas untuk menampilkan component ke layar dengan cara memasukan component ke tag HTML yang di targetkan\r
+\r
+- pada baris ke 3 kita menggunakan fungsi **Render** dengan parameter pertama merupakan component yang akan di render dan parameter ke dua merupakan target atau tempat di rampilkan nya component\r
+\r
+## # Comment\r
+untuk membuat komentar di dalam seleku cukup gunakan /**/ atau multi-line comment\r
+yang ada di javascript\r
+\r
+\`\`\`jsx\r
+/*ini contoh komentar*/\r
+\`\`\`\r
+\r
+## # Template Literal\r
+selek-kit menggunakan template literal bawaan javascript untuk menampilkan\r
+suatu kontent text di dalam html\r
+\r
+##### contoh template literal\r
+\`\`\`jsx\r
+\r
+    const seleku = "i am seleku-kit";\r
+\r
+    <h1> hello \${seleku}</h1>;\r
+\r
+\`\`\`\r
+\r
+#### # function component\r
+seleku-kit memungkinkan anda untuk membuat component dari suatu fungsi sebagai berikut\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function Welcome(){\r
+\r
+    return <h1>Welcome to seleku-kit!!</h1>;\r
+\r
+}\r
+\r
+Render(<Welcome><Welcome/>,document.body);\r
+\r
+\`\`\`\r
+\r
+untuk menerima argument dari function component lakukan sebagai berikut\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function Welcome({username}){\r
+\r
+    return <h1 state="{{username}}">\r
+        Welcome to seleku-kit!! \${this.state.username}\r
+    </h1>;\r
+\r
+}\r
+\r
+Render(<Welcome username="'Daberdev'"><Welcome/>,document.body);\r
+\r
+\`\`\`\r
+\r
+ketika suatu function component menerima argument maka ketika component tersebut di panggil untuk memasukan argumen nya cukup lakukan sperti memasukan attribute di html biasa, untuk saat ini abaikan attribute state dan penggunaan template literal yang ada pada kode tersebut\r
+\r
+> pemberitahuan setiap attribute yang di miliki suatu component akan memiliki value yang di anggap javascript biasa oleh karena itu untuk memasukan suatu string ke dalam attribute gunakan \`\` atau ''\r
+\r
+\r
+## # Attribute Spesial\r
+component di seleku memiliki atribut-atribut khusus maupun umum di antara nya sebagai berikut\r
+\r
+## # $toBeChild \r
+attribute **$toBeChild** merupakan attribute yang di gunakan di dalam parameter suatu funsi component\r
+attribute ini di gunakan untuk memberikan component yang ada di dalam function componentid dari parent component nya agar bisa di gunakan sebagai target untuk component yang ada di dalam function component di render\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function Welcome({$toBeChild}){\r
+\r
+    return <h1>\r
+        Welcome to seleku-kit!! \r
+    </h1>;\r
+\r
+}\r
+\r
+Render(<div><Welcome username="'Daberdev'"><Welcome/></div>,document.body);\r
+\r
+\`\`\`\r
+\r
+## # $beChild \r
+attribute **$beChild** merupakan attribute yang berpasangan dengan attribute **$toBeChild** jika **$toBeChild** hanya memberikan semua properti untuk di gunakan kepada component yang ada di dalam function component maka **$beChild** adalah attribute yang menerima semua properti tersebut untuk kemudian di gunakan oleh component di dalam function component me render\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function Welcome({$toBeChild}){\r
+\r
+    return <h1 $beChild>\r
+        Welcome to seleku-kit!! \r
+    </h1>;\r
+\r
+}\r
+\r
+Render(<div><Welcome username="'Daberdev'"><Welcome/></div>,document.body);\r
+\r
+\`\`\`\r
+\r
+## # $loopComponent \r
+attribute ini merupakan attribute yang hanya di miliki oleh component yang melakukan looping baik di dalam for loop maupun while bahkan array method sekalipun\r
+\r
+\`\`\`jsx\r
+\r
+async function AllContributor({$toBeChild}){\r
+\r
+    let loopingComponent = [];\r
+\r
+    const data = await (await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();\r
+\r
+    for (let x of data){\r
+\r
+        loopingComponent = [\r
+            ...loopingComponent,\r
+            ...<img \r
+            $loopComponent="x.node_id"\r
+            title="x.login" \r
+            src="x.avatar_url"/>];\r
+\r
+    }\r
+\r
+    return loopingComponent;\r
+\r
+}\r
+\r
+(async ()=> Render(<div><AllContributor $async></AllContributor></div>))();\r
+\r
+\`\`\`\r
+attribute ini membutuhkan value yang merupakan id yang unik\r
+\r
+## # component:id\r
+ini merupakan attribute yang berfungsi sebagai id dari suatu component\r
+> id yang di definiksan dengan id component berbeda dengan id dari HTML\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+const card = <div component:id="example_id"></div>;\r
+\r
+Render(card,document.body);\r
+\r
+\`\`\`\r
+\r
+dan perlu di ingat bahwa **component:id** hanya di miliki oleh component dari HTML bukan dari function\r
+component\r
+\r
+## # state\r
+attribute ini merupakan attribute khusus dan hanya di miliki oleh component dari tag HTML dan bukan dari component function, attribute ini di gunakan untuk memasukan data dinamis yang dapat di ubah-ubah sesuai dengan kebutuhan anda dan untuk data yang di masukan harus dalam bentuk object {{}} kurung kurawal bagian luar merupakan kurung kurawal yang di gunakan untuk memberitahukan kepada kompiler bahwa kode yang terdapat di dalam kurung kurawal pertama akan di eksekusi di sisi kompiler terlebih dahulu agar tidak di anggap sebagai string oleh compiler\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function Card(){\r
+\r
+    return  <div>\r
+                <h1>Hello</h1>\r
+                <p state="{{\r
+                    count: 0\r
+                }}">count \${this.state.count}</p>\r
+            </div>;\r
+\r
+}\r
+\r
+Render(<Card></Card>,document.body);\r
+\r
+\`\`\`\r
+\r
+untuk melakukan update pada state anda harus menggunakan fungsi **findById** yang terdapat di dalam dabcom perlu di ketahui bahwa fungsi **findById** adalah fungsi yang memutuhkan id dari suatu component\r
+id dari component berbeda dengan id dari HTML\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render, findById } from "dabcom";\r
+\r
+function Card(){\r
+\r
+    return  <div>\r
+                <h1>Hello</h1>\r
+                <p component:id="counting" state="{{\r
+                    count: 0\r
+                }}">count \${this.state.count}</p>\r
+            </div>;\r
+\r
+}\r
+\r
+window.setInterval(()=>{\r
+\r
+    findById("counting").state.count++;\r
+\r
+},1000);\r
+\r
+Render(<Card></Card>,document.body);\r
+\r
+\`\`\`\r
+\r
+## # on:\r
+attribute ini merupakan attribute spesial yang hanya di miliki oleh component dari tag HTML dan bukan dari function component, attribute ini di gunakan untuk membuat event pada component HTML yang di render dan untuk menggunakan cukup dengan \`on:nama-event\` contoh \`on:click\` dan untuk value dari attribute ini berupa function seperti berikut \`on:click="{()=>{}}"\` seleku-kit mengharuskan untuk menggunakan arrow function di dalam attribute on agar tidak terjadi error pada compiler di karena aturan kurung kurawal pertama seperti yang terdapat pada attribute state\r
+\r
+\`\`\`jsx\r
+\r
+import { dabMain, Render, findById } from "dabcom";\r
+\r
+function Card(){\r
+\r
+    return  <div>\r
+                <h1 on:click="{()=>{\r
+\r
+                    alert('hello world');\r
+\r
+                }}">Hello</h1>\r
+            </div>;\r
+\r
+}\r
+\r
+Render(<Card></Card>,document.body);\r
+\r
+\`\`\`\r
+\r
+## # $async\r
+attribute ini hanya di miliki oleh component function dan di gunakan untuk\r
+me render async component function dan parent atau component induk dari\r
+async component function harus merupakan fungsi async\r
+\r
+### contoh\r
+\r
+\`\`\`jsx\r
+\r
+async function AllContributor({$toBeChild}){\r
+\r
+    let loopingComponent = [];\r
+\r
+    const data = await (await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();\r
+\r
+    for (let x of data){\r
+\r
+        loopingComponent = [\r
+            ...loopingComponent,\r
+            ...<img \r
+            $loopComponent="x.node_id"\r
+            title="x.login" \r
+            src="x.avatar_url"/>];\r
+\r
+    }\r
+\r
+    return loopingComponent;\r
+\r
+}\r
+\r
+const App = async ()=>{\r
+    Render(<div><AllContributor $async></AllContributor></div>))();\r
+}\r
+\r
+App();\r
+\r
+\`\`\`\r
+\r
+# # Seleku Routing\r
+seleku-kit memiliki sistem routing menggunakan SPA (single page application) bawaan yang dapat anda gunakan\r
+dengan mudah untuk contoh kodenya sebagai berikut\r
+\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+import { Router } from "dabcom/spa/route.js";\r
+\r
+function Home(){\r
+\r
+    return <h1>Hello World!!</h1>;\r
+\r
+}\r
+\r
+<Router.route \r
+\r
+    path="'/home'"\r
+    component="<Home></Home>"\r
+    target="{()=>{\r
+        \r
+        return document.body;\r
+\r
+    }}"\r
+    onRender="{()=>{\r
+\r
+        console.log('your in home page');\r
+\r
+    }}"\r
+\r
+></Router.route>;\r
+\r
+\`\`\`\r
+berikut adalah penjelasan sintaks di atas \r
+- **Router.route** merupakan suatu fungsi yang di ambil dari dabcom library\r
+- argumen **path** merupakan argument yang di butuhkan oleh router untuk menentukan url bagi component untuk di render\r
+- argument **component** merupakan argument yang menerima component yang akan di render\r
+- argument **target** argument ini di gunakan untuk menerima element / component HTML yang akan menjadi tempat render\r
+- argument **onRender** yaitu argument yang menerima callback function ketika component di render\r
+\r
+## # mengirim data\r
+untuk mengirimkan data ke dalam router anda cukup menggunakan attribute data\r
+dan untuk mengakses data yang di kirim cukup gunakan this di ikuti dengan nama property dari data yang di kirim\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+import { Router } from "dabcom/spa/route.js";\r
+\r
+function Home(){\r
+\r
+    return <h1>Hello \${this.user}!!</h1>;\r
+\r
+}\r
+\r
+<Router.route \r
+\r
+    path="'/home'"\r
+    component="<Home></Home>"\r
+    target="{()=>{\r
+        \r
+        return document.body;\r
+\r
+    }}"\r
+    onRender="{()=>{\r
+\r
+        console.log('your in home page');\r
+\r
+    }}"\r
+\r
+    data = "{{\r
+        user: 'daber'\r
+    }}"\r
+\r
+></Router.route>;\r
+\r
+\`\`\`\r
+untuk melakukan pemindahan url gunakan element a href di ikuti dengan attribute\r
+**data-link**\r
+\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+import { Router } from "dabcom/spa/route.js";\r
+\r
+function Home(){\r
+\r
+    return <h1>\r
+        Hello \${this.user}!!\r
+        <a href="'/about'" data-link>to About</a>\r
+    </h1>\r
+\r
+}\r
+\r
+function About(){\r
+\r
+    return <h1>\r
+        i create by seleku-kit\r
+        <a href="'/home'" data-link>to Home</a>\r
+    </h1>\r
+\r
+}\r
+\r
+<Router.route \r
+\r
+    path="'/home'"\r
+    component="<Home></Home>"\r
+    target="{()=>{\r
+        \r
+        return document.body;\r
+\r
+    }}"\r
+    onRender="{()=>{\r
+\r
+        console.log('your in home page');\r
+\r
+    }}"\r
+\r
+    data = "{{\r
+        user: 'daber'\r
+    }}"\r
+\r
+></Router.route>;\r
+\r
+<Router.route \r
+\r
+    path="'/about'"\r
+    component="<About></About>"\r
+    target="{()=>{\r
+        \r
+        return document.body;\r
+\r
+    }}"\r
+    onRender="{()=>{\r
+\r
+        console.log('your in home page');\r
+\r
+    }}"\r
+></Router.route>;\r
+\r
+\`\`\`\r
+\r
+# # Loop Component\r
+seleku juga memungkinkan anda untuk melakukan loop pada component pada bagian\r
+attribute **$loopComponent** anda telah melihat bahwa seleku-kit memiliki attribute tersebut yang harus di gunakan pada saat anda melakukan\r
+looping pada component baik itu menggunakan for ataupun while bahkan \r
+array method sekalipun\r
+\r
+## # Loop example\r
+seleku-kit sebenarnya melakukan compile yaitu mentransformasi sintaks dari .selek\r
+ke .js sehingga suatu component baik itu function component maupun HTML component\r
+akan di ubah menjadi sintaks javascript yang merupakan suatu array ataupun mengembalikan suatu array oleh karena itu ketika anda melakukan looping \r
+di haruskan untuk mengurai array yang di bentuk oleh compiler kemudian di push\r
+ke dalam array yang baru\r
+\r
+### # Contoh For Loop\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+\r
+const allFruits = ["grape","apple","strawberry","pinapple"];\r
+\r
+function FruitsName(){\r
+\r
+    let newCompoonent = [];\r
+\r
+    for(let x in allFruits){\r
+        /*ingat anda harus mengisikan id yang unik untuk loop component*/\r
+        newComponent = [\r
+            ...newComponent,\r
+            ...<h1 $loopComponent="x" state="{{content: allFruits[x]}}">\r
+                \${this.state.content}\r
+               </h1>\r
+        ];\r
+\r
+    }\r
+\r
+    /*anda harus mengembalikan array dari component yang baru*/\r
+\r
+    return newComponent;\r
+\r
+}\r
+\r
+\`\`\`\r
+\r
+untuk contoh lainya anda dapat melakukan penerapan yang sama baik pada while maupun\r
+array method\r
+\r
+# # Render\r
+sejauh ini kita sering melihat fungsi **Render** di hampir setiap contoh kode\r
+dan telah di jelaskan di beberapa sub-docs bahwa fungsi ini merupakan fungsi\r
+yang di tugaskan untuk me render tetapi apakah hanya untuk me render static?, tentu tidak fungsi ini juga dapat melakukan update render dan melakukan pengiriman\r
+data ke dalam component yang di render\r
+\r
+### Contoh Kode\r
+\r
+## # Render Update\r
+\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function SayHello({gender}){\r
+\r
+    if(gender === "male"){\r
+\r
+        return <h1>Hello mr</h1>\r
+\r
+    }\r
+\r
+    if(gender === "female"){\r
+\r
+        return <h1>Hello mrs</h1>\r
+\r
+    }\r
+\r
+}\r
+\r
+const say = Render(<SayHello gender="'male'"></SayHello>,document.body);\r
+\r
+say.updateComponentProperty(SayHello,{\r
+    gender: "female"\r
+});\r
+\r
+\`\`\`\r
+fungsi **Render** akan mengembalikan suatu fungsi **updateComponentProperty** di mana\r
+fungsi ini akan melakukan update terhadap render dengan properti yang di terima\r
+untuk parameter pertama pada fungsi ini yaitu component function dan paramter ke 2\r
+merupakan properti yang akan anda update\r
+\r
+## # Embbed Data\r
+\r
+seperti yang telah di beritahukan bahwa fungsi **Render** dapat melakukan pengiriman data yang akan di embbed ke dalam component dan untuk mengakses nya\r
+cukup gunakan this di ikuti dengan nama property yang di embbed\r
+\r
+\`\`\`jsx\r
+import { dabMain, Render } from "dabcom";\r
+\r
+function SayHello({gender}){\r
+\r
+    if(gender === "male"){\r
+\r
+        return <h1>Hello mr \${this.username}</h1>\r
+\r
+    }\r
+\r
+    if(gender === "female"){\r
+\r
+        return <h1>Hello mrs \${this.username}</h1>\r
+\r
+    }\r
+\r
+}\r
+\r
+const say = Render(<SayHello gender="'male'"></SayHello>,\r
+            document.body,\r
+            {\r
+                username: "\`nanda\`"\r
+            });\r
+\r
+say.updateComponentProperty(SayHello,{\r
+    gender: "female"\r
+});\r
+\r
+\`\`\`\r
+tapi perlu di ingat bahwa embbed data ini merupakan data statis bukan data dinamis\r
+\r
+# # Whats Next ?\r
+untuk saat ini seleku masih dalam tahap pengembangan dan akan terus di lakukan\r
+update untuk selanjutnya seleku akan memiliki fitur web3 yang saat ini sedang di development `;var me=`# All API\r
+## # Render\r
+**\`Render : Function\`**\r
+\r
+\`\`\`ts\r
+Render(component: Component, target: HTMLElement, embbedData: Object)\r
+\`\`\`\r
+\r
+|Argument | Description |\r
+|:--------|:-----------|\r
+|component|komponent yang akan di render bisa berupa component function atau component HTML|\r
+|target| HTMLElement yang akan menjadi tempat di render nya component|\r
+|embbedData| merupakan data bertipe object yang akan di masukan ke dalam component|\r
+\r
+| Method      | Description |\r
+| :----------- | :----------- |\r
+| updateComponentProperty| melakukan update pada component yang di render |\r
+\`\`\`ts\r
+Render(component: Component, target: HTMLElement, embbedData: Object).updateComponentProperty(componentFunction: ComponentFunctiom,data: Object);\r
+\`\`\`\r
+\r
+## # findById\r
+**\`findById : Function\`**\r
+\r
+\`\`\`ts\r
+findById(componentId: String)\r
+\`\`\`\r
+\r
+|Argument | Description |\r
+|:--------|:-----------|\r
+|componentId|component:id dari suatu component|\r
+\r
+## # Router\r
+**\`Router : Object\`**\r
+\r
+\`\`\`ts\r
+Router\r
+\`\`\`\r
+\r
+| Method      | Description |\r
+| :----------- | :----------- |\r
+| route| melakukan routing|\r
+\r
+\`\`\`ts\r
+Router.route(Object: {path: String,target: Function,component: Component,data: Object})\r
+\`\`\``;var de="# Config\r\nseleku menggunakan esbuild sebagai bundler nya untuk melakukan config maka\r\nanda cukup melakukan pengautran pada file `esbuild.config.json` atau `build.config.json` untuk mendapatkan configurasi silahkan kunjungi web resmi esbuild\r\n**[Esbuild Config](https://esbuild.github.io/getting-started/)**";async function Le({parentcomponent:o,positioncomponent:e}){let n=[],t=await(await fetch("https://api.github.com/repos/daberpro/dabcom/contributors")).json();for(let a of t)n=[...n,u.createRawComponent("img",{content:"``",parentComponent:o,positionComponent:"1510180070284959a008100206100333"+a.node_id,state:{},event:{},attribute:{title:a.login,src:a.avatar_url},id:""})];return n}async function Be(){return[u.createRawComponent("div",{content:"`                                                                                                            `",parentComponent:"",positionComponent:"9003108200904500a402701480064097",state:{},event:{},attribute:{class:"hero"},id:""}),...T({$id:"00090020162042008000206009000800",parentcomponent:"9003108200904500a402701480064097",positioncomponent:"10010900602040308076187800709090"}),...I({$id:"19154010164140068007561066980003",$class:"main-panel",parentcomponent:"9003108200904500a402701480064097",positioncomponent:"6682232022344001a800800090686094"}),u.createRawComponent("h1",{content:"`                        # Seleku-kit                    `",parentComponent:"6682232022344001a800800090686094",positionComponent:"35089024168441008094090120434680",state:{},event:{},attribute:{},id:""}),u.createRawComponent("p",{content:"`                        simplify to make the web fast without leaving javascript to write HTML                    `",parentComponent:"6682232022344001a800800090686094",positionComponent:"1240093330004080b203880050460950",state:{},event:{},attribute:{},id:""}),...U({$id:"11740400109446318009730077080300",parentcomponent:"6682232022344001a800800090686094",positioncomponent:"47001030112048008077109240039073"}),u.createRawComponent("i",{content:"``",parentComponent:"47001030112048008077109240039073",positionComponent:"90020005803540539003370305900000",state:{},event:{},attribute:{class:"fas fa-arrow-down"},id:""}),u.createRawComponent("span",{content:"`Read More..`",parentComponent:"47001030112048008077109240039073",positionComponent:"10086670544049308000774002401546",state:{},event:{},attribute:{},id:""}),u.createRawComponent("div",{content:"`                                    `",parentComponent:"9003108200904500a402701480064097",positionComponent:"94054440020844088159100300561708",state:{},event:{},attribute:{class:"saparator"},id:""}),...U({$id:"9070050950214301a010160504009066",parentcomponent:"94054440020844088159100300561708",positioncomponent:"44556090165440178830199631074051"}),u.createRawComponent("h2",{content:"`                            Seleku-kit feature                        `",parentComponent:"44556090165440178830199631074051",positionComponent:"90800060502643068480100504400046",state:{},event:{},attribute:{},id:""}),u.createRawComponent("div",{content:"`                                                                            `",parentComponent:"9003108200904500a402701480064097",positionComponent:"12042074106546028696834580000000",state:{},event:{},attribute:{class:"feature"},id:""}),...I({$id:"11985063156846139580607470053000",$class:"mini-card",parentcomponent:"12042074106546028696834580000000",positioncomponent:"42001019870146608631152107000047"}),u.createRawComponent("h1",{content:"`Reactive`",parentComponent:"42001019870146608631152107000047",positionComponent:"70088018100040758307103084498200",state:{},event:{},attribute:{},id:""}),u.createRawComponent("p",{content:"`                            seleku kit menggunakan reaktivitas untuk melakukan update ui                        `",parentComponent:"42001019870146608631152107000047",positionComponent:"4040740010404000a734200160082000",state:{},event:{},attribute:{},id:""}),...I({$id:"6009072011014080b020190013020201",$class:"mini-card",parentcomponent:"12042074106546028696834580000000",positioncomponent:"13302005200740148020802030800037"}),u.createRawComponent("h1",{content:"`Web3`",parentComponent:"13302005200740148020802030800037",positionComponent:"82100504109240909593801007010009",state:{},event:{},attribute:{},id:""}),u.createRawComponent("p",{content:"`                            fitur utama dari seleku kit adalah web3 frontend, membuat website desentralisasi dengan blockchain                        `",parentComponent:"13302005200740148020802030800037",positionComponent:"17051020110044308062180970700002",state:{},event:{},attribute:{},id:""}),...I({$id:"4106031811304206b034900205203019",$class:"mini-card",parentcomponent:"12042074106546028696834580000000",positioncomponent:"97065609190241828000256000000001"}),u.createRawComponent("h1",{content:"`Metaverse`",parentComponent:"97065609190241828000256000000001",positionComponent:"9600800310004093b400007200700921",state:{},event:{},attribute:{},id:""}),u.createRawComponent("p",{content:"`                            dukungan penuh dalam pengembangan pemrograman berbasis grafis pada web dan memungkinkan pengembangan metaverse                        `",parentComponent:"97065609190241828000256000000001",positionComponent:"6550000010604490b007130500300023",state:{},event:{},attribute:{},id:""}),...I({$id:"50000709110843159401880546000100",$class:"powered",parentcomponent:"9003108200904500a402701480064097",positioncomponent:"70000907105040008309218007122060"}),u.createRawComponent("h1",{content:"`Powered By EsBuild`",parentComponent:"70000907105040008309218007122060",positionComponent:"16053100100840909810699050062880",state:{},event:{},attribute:{},id:""}),u.createRawComponent("p",{content:"`                        seleku kit berjalan diatas esbuild, esbuild sebagai bundler dan memungkinkan developer untuk melakukan banyak hal yang menjadi keterbatasan antara node js dengan frontend                    `",parentComponent:"70000907105040008309218007122060",positionComponent:"10904000128048428611160000091500",state:{},event:{},attribute:{},id:""}),u.createRawComponent("div",{content:"`                                                        `",parentComponent:"9003108200904500a402701480064097",positionComponent:"46370000300448608030540753047009",state:{},event:{},attribute:{class:"contributor"},id:"a"}),u.createRawComponent("h1",{content:"`Contributors`",parentComponent:"46370000300448608030540753047009",positionComponent:"13046085829040108203390067303600",state:{},event:{},attribute:{},id:""}),...await Le({$id:"10207074100240008084632479990400",parentcomponent:"46370000300448608030540753047009",positioncomponent:"20988938122440078062415010308348"})]}async function J(o){let e=V("allContent").element,n=V("shortContent").element,t={},a=null,i=null;if(e instanceof HTMLElement){e.innerHTML=g.parse(o);let s=[...e.children];s=s.filter(l=>l.nodeName.toLowerCase()==="h1"||l.nodeName.toLowerCase()==="h2"||l.nodeName.toLowerCase()==="h4");for(let l of s)l.nodeName.toLowerCase()==="h1"?(t[l.textContent.replace(/\s/igm,"")]=A([u.createRawComponent("details",{content:"``",parentComponent:"",positionComponent:"47900020577045089439502080627040",state:{},event:{},attribute:{class:"tree-nav__item is-expandable"},id:""}),u.createRawComponent("summary",{content:"`${this.state.content}`",parentComponent:"47900020577045089439502080627040",positionComponent:"75002006104048058500840706090112",state:{content:l.textContent},event:{onclick:()=>{l.scrollIntoView()}},attribute:{class:"tree-nav__item-title"},id:""})],n).component.element,a=l.textContent.replace(/\s/igm,""),i=l.nodeName.toLowerCase()):l.nodeName.toLowerCase()==="h2"?(t[l.textContent.replace(/\s/igm,"")]=A([u.createRawComponent("details",{content:"``",parentComponent:"",positionComponent:"10060900178047608967300090010090",state:{},event:{},attribute:{class:"tree-nav__item is-expandable"},id:""}),u.createRawComponent("summary",{content:"`${this.state.content}`",parentComponent:"10060900178047608967300090010090",positionComponent:"19500015130248408009100083700009",state:{content:l.textContent},event:{onclick:()=>{l.scrollIntoView()}},attribute:{class:"tree-nav__item-title"},id:""})],t[a]).component.element,i=l.nodeName.toLowerCase(),i!=="h2"&&(a=l.textContent.replace(/\s/igm,""))):t[l.textContent.replace(/\s/igm,"")]=A([u.createRawComponent("summary",{content:"`${this.state.content}`",parentComponent:"",positionComponent:"3000900980144300a720230443207021",state:{content:l.textContent},event:{onclick:()=>{l.scrollIntoView()}},attribute:{class:"tree-nav__item-title"},id:""})],t[a]).component.element}hljs.highlightAll();let r={contentSelector:".main-content",copyIconClass:"fas fa-copy",checkIconClass:"fas fa-check text-success"};window.highlightJsBadge(r),A([u.createRawComponent("button",{content:"``",parentComponent:"",positionComponent:"83400408105046009400158900903000",state:{},event:{onclick:()=>{n.classList.toggle("show")}},attribute:{class:"panel-btn"},id:""}),u.createRawComponent("i",{content:"``",parentComponent:"83400408105046009400158900903000",positionComponent:"13553096100040088650830006013000",state:{},event:{},attribute:{class:"fas fa-bars"},id:""})],e)}async function He(){E.route({$id:"1034420711704907b047184070900108",path:"/",component:await Be({$id:"09820000101140708080170875020909"}),target:()=>document.body,onrender:()=>{X()}})}He();E.route({$id:"34138307990444018700133607250550",path:"/docs",component:le({$id:"1400369011004460b007107040880607"}),target:()=>document.body,onrender:()=>{J(ce)}});E.route({$id:"40530031600842908628230700083072",path:"/api",component:pe({$id:"80040010202840009505106040006004"}),target:()=>document.body,onrender:()=>{J(me)}});E.route({$id:"80900907808040409617130000390272",path:"/config",component:ue({$id:"80100500755040988626100100077733"}),target:()=>document.body,onrender:()=>{J(de)}});})();
