@@ -2268,7 +2268,7 @@
     }), dabMain.createRawComponent(`div`, {
       content: "``",
       parentComponent: positioncomponent,
-      positionComponent: "16590092607040608090314260985320" + $id,
+      positionComponent: "16136011000240108000287160910020" + $id,
       state: {},
       event: {},
       attribute: {
@@ -2330,9 +2330,9 @@
       },
       id: ""
     }), dabMain.createRawComponent(`div`, {
-      content: "`                                                                                                `",
+      content: "`                                                                                                                    `",
       parentComponent: positioncomponent,
-      positionComponent: "19010097103040508000150008000000",
+      positionComponent: "1512600210004005b177128202097410",
       state: {},
       event: {},
       attribute: {
@@ -2341,8 +2341,8 @@
       id: ""
     }), dabMain.createRawComponent(`a`, {
       content: "`                        Home                    `",
-      parentComponent: "19010097103040508000150008000000",
-      positionComponent: "52600009003040409500364081009980",
+      parentComponent: "1512600210004005b177128202097410",
+      positionComponent: "18003209704840958060100892625990",
       state: {},
       event: {},
       attribute: {
@@ -2352,8 +2352,8 @@
       id: ""
     }), dabMain.createRawComponent(`a`, {
       content: "`                        Docs                    `",
-      parentComponent: "19010097103040508000150008000000",
-      positionComponent: "14000020182140059300872172000051",
+      parentComponent: "1512600210004005b177128202097410",
+      positionComponent: "1098004660044220a090300008000500",
       state: {},
       event: {},
       attribute: {
@@ -2363,8 +2363,8 @@
       id: ""
     }), dabMain.createRawComponent(`a`, {
       content: "`                        API                    `",
-      parentComponent: "19010097103040508000150008000000",
-      positionComponent: "92900605152740809300240047040093",
+      parentComponent: "1512600210004005b177128202097410",
+      positionComponent: "34002302195647048006404508000102",
       state: {},
       event: {},
       attribute: {
@@ -2374,13 +2374,23 @@
       id: ""
     }), dabMain.createRawComponent(`a`, {
       content: "`                        Config                    `",
-      parentComponent: "19010097103040508000150008000000",
-      positionComponent: "00707024446040098880100500090318",
+      parentComponent: "1512600210004005b177128202097410",
+      positionComponent: "41821093100946088608120801723663",
       state: {},
       event: {},
       attribute: {
         "href": "/config",
         "data-link": ""
+      },
+      id: ""
+    }), dabMain.createRawComponent(`a`, {
+      content: "`Github`",
+      parentComponent: "1512600210004005b177128202097410",
+      positionComponent: "21003000151040809509178000905580",
+      state: {},
+      event: {},
+      attribute: {
+        "href": "https://github.com/daberpro/dabCom"
       },
       id: ""
     })];
@@ -2394,7 +2404,7 @@
     return [dabMain.createRawComponent(`div`, {
       content: "`                                                            `",
       parentComponent: "",
-      positionComponent: "40003504000047038028106059007909",
+      positionComponent: "80480704004340008000407470800605",
       state: {},
       event: {},
       attribute: {
@@ -2402,13 +2412,13 @@
       },
       id: ""
     }), ...Navbar({
-      "$id": "10860772301047008824122000606003",
-      "parentcomponent": "40003504000047038028106059007909",
-      "positioncomponent": "10950061900840119101770230930365"
+      "$id": "12060030706242308700100655206003",
+      "parentcomponent": "80480704004340008000407470800605",
+      "positioncomponent": "80004008130046039190100000426086"
     }), dabMain.createRawComponent(`div`, {
       content: "`                `",
-      parentComponent: "40003504000047038028106059007909",
-      positionComponent: "1000050114064459b809160486700309",
+      parentComponent: "80480704004340008000407470800605",
+      positionComponent: "52400090810744848003355113045477",
       state: {},
       event: {},
       attribute: {
@@ -2417,8 +2427,8 @@
       id: "shortContent"
     }), dabMain.createRawComponent(`div`, {
       content: "`                                    `",
-      parentComponent: "40003504000047038028106059007909",
-      positionComponent: "15878090120046098034100448000007",
+      parentComponent: "80480704004340008000407470800605",
+      positionComponent: "19000010120041458910104205300710",
       state: {},
       event: {},
       attribute: {
@@ -2436,7 +2446,7 @@
     return [dabMain.createRawComponent(`div`, {
       content: "`                                                            `",
       parentComponent: "",
-      positionComponent: "80810378100441049132605608000000",
+      positionComponent: "10100084302040109003469007282009",
       state: {},
       event: {},
       attribute: {
@@ -2444,13 +2454,13 @@
       },
       id: ""
     }), ...Navbar({
-      "$id": "62200320065040418930100044101009",
-      "parentcomponent": "80810378100441049132605608000000",
-      "positioncomponent": "74620331300040848044150000360000"
+      "$id": "9909069012024370a403680979408405",
+      "parentcomponent": "10100084302040109003469007282009",
+      "positioncomponent": "1000003268824451a716179620581006"
     }), dabMain.createRawComponent(`div`, {
       content: "`                `",
-      parentComponent: "80810378100441049132605608000000",
-      positionComponent: "1776007932404002b480104090404205",
+      parentComponent: "10100084302040109003469007282009",
+      positionComponent: "00054002107440758010102055499068",
       state: {},
       event: {},
       attribute: {
@@ -2459,8 +2469,8 @@
       id: "shortContent"
     }), dabMain.createRawComponent(`div`, {
       content: "`                                    `",
-      parentComponent: "80810378100441049132605608000000",
-      positionComponent: "10230000168042609440000910068413",
+      parentComponent: "10100084302040109003469007282009",
+      positionComponent: "01010337100040008818180103201039",
       state: {},
       event: {},
       attribute: {
@@ -2478,7 +2488,7 @@
     return [dabMain.createRawComponent(`div`, {
       content: "`                                                            `",
       parentComponent: "",
-      positionComponent: "1997908710044427a015600038600000",
+      positionComponent: "44030000140040868070865500809005",
       state: {},
       event: {},
       attribute: {
@@ -2486,13 +2496,13 @@
       },
       id: ""
     }), ...Navbar({
-      "$id": "10701630150640048350105804203383",
-      "parentcomponent": "1997908710044427a015600038600000",
-      "positioncomponent": "32003090900040408061200505002001"
+      "$id": "62098595900047018700420850402530",
+      "parentcomponent": "44030000140040868070865500809005",
+      "positioncomponent": "9203822761004020b489614700060802"
     }), dabMain.createRawComponent(`div`, {
       content: "`                `",
-      parentComponent: "1997908710044427a015600038600000",
-      positionComponent: "59505050155040748100100000810099",
+      parentComponent: "44030000140040868070865500809005",
+      positionComponent: "58059900707344428048107090021200",
       state: {},
       event: {},
       attribute: {
@@ -2501,8 +2511,8 @@
       id: "shortContent"
     }), dabMain.createRawComponent(`div`, {
       content: "`                                    `",
-      parentComponent: "1997908710044427a015600038600000",
-      positionComponent: "10307503061948578647225000984000",
+      parentComponent: "44030000140040868070865500809005",
+      positionComponent: "13260900160845768084124479020024",
       state: {},
       event: {},
       attribute: {
@@ -2532,7 +2542,7 @@
       loopingComponent = [...loopingComponent, ...[dabMain.createRawComponent(`img`, {
         content: "``",
         parentComponent: parentcomponent,
-        positionComponent: "60210500100045088070408051195107" + x.node_id,
+        positionComponent: "15050100149047638600380708000408" + x.node_id,
         state: {},
         event: {},
         attribute: {
@@ -2548,7 +2558,7 @@
     return [dabMain.createRawComponent(`div`, {
       content: "`                                                                                                            `",
       parentComponent: "",
-      positionComponent: "18300056101247089718100710130000",
+      positionComponent: "4020200211004506a208910009043000",
       state: {},
       event: {},
       attribute: {
@@ -2556,38 +2566,38 @@
       },
       id: ""
     }), ...Navbar({
-      "$id": "10080300504340748279108000709030",
-      "parentcomponent": "18300056101247089718100710130000",
-      "positioncomponent": "07507266164040798581708700505100"
+      "$id": "7068380070194880a512130000700799",
+      "parentcomponent": "4020200211004506a208910009043000",
+      "positioncomponent": "10600909100848508250140078423600"
     }), ...DCard({
-      "$id": "49000301212546029030050000996020",
+      "$id": "9300690960954030a600807307908193",
       "$class": "main-panel",
-      "parentcomponent": "18300056101247089718100710130000",
-      "positioncomponent": "70609092112040138000299003168197"
+      "parentcomponent": "4020200211004506a208910009043000",
+      "positioncomponent": "20020080057040058860700409040707"
     }), dabMain.createRawComponent(`h1`, {
       content: "`                        # Seleku-kit                    `",
-      parentComponent: "70609092112040138000299003168197",
-      positionComponent: "10009993545040648800600409500921",
+      parentComponent: "20020080057040058860700409040707",
+      positionComponent: "53406050608840008001196109300008",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`p`, {
-      content: "`                        simplfy to make web be fast without leaving javascript for write HTML                    `",
-      parentComponent: "70609092112040138000299003168197",
-      positionComponent: "10300002101040508652672000090001",
+      content: "`                        simplify to make the web fast without leaving javascript to write HTML                    `",
+      parentComponent: "20020080057040058860700409040707",
+      positionComponent: "17400699134244709000909009810095",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), ...DChips({
-      "$id": "12066000900940008007707821060012",
-      "parentcomponent": "70609092112040138000299003168197",
-      "positioncomponent": "10500906300747218634290520008259"
+      "$id": "19054000640049148434930204810200",
+      "parentcomponent": "20020080057040058860700409040707",
+      "positioncomponent": "10127005800649168080613206000001"
     }), dabMain.createRawComponent(`i`, {
       content: "``",
-      parentComponent: "10500906300747218634290520008259",
-      positionComponent: "20077069967248648203100900380000",
+      parentComponent: "10127005800649168080613206000001",
+      positionComponent: "10820108250449009400300008000000",
       state: {},
       event: {},
       attribute: {
@@ -2596,16 +2606,16 @@
       id: ""
     }), dabMain.createRawComponent(`span`, {
       content: "`Read More..`",
-      parentComponent: "10500906300747218634290520008259",
-      positionComponent: "7100000410084070a294830078030522",
+      parentComponent: "10127005800649168080613206000001",
+      positionComponent: "20036851333340008100180008720940",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`div`, {
       content: "`                                    `",
-      parentComponent: "18300056101247089718100710130000",
-      positionComponent: "10905606207045208004100008330075",
+      parentComponent: "4020200211004506a208910009043000",
+      positionComponent: "57852000630040209068100070003309",
       state: {},
       event: {},
       attribute: {
@@ -2613,21 +2623,21 @@
       },
       id: ""
     }), ...DChips({
-      "$id": "9000850010584007a007054078009060",
-      "parentcomponent": "10905606207045208004100008330075",
-      "positioncomponent": "52000697104847058016600003090990"
+      "$id": "28004600540042848026170997043705",
+      "parentcomponent": "57852000630040209068100070003309",
+      "positioncomponent": "50305090107049109319430037200474"
     }), dabMain.createRawComponent(`h2`, {
       content: "`                            Seleku-kit feature                        `",
-      parentComponent: "52000697104847058016600003090990",
-      positionComponent: "10100005902143029009400530300700",
+      parentComponent: "50305090107049109319430037200474",
+      positionComponent: "39500704602942158832580050315480",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`div`, {
       content: "`                                                                            `",
-      parentComponent: "18300056101247089718100710130000",
-      positionComponent: "38060092009042888005205699030000",
+      parentComponent: "4020200211004506a208910009043000",
+      positionComponent: "10800047400540269003108001428268",
       state: {},
       event: {},
       attribute: {
@@ -2635,93 +2645,93 @@
       },
       id: ""
     }), ...DCard({
-      "$id": "47000080198042438009106103070008",
+      "$id": "09000030620044148500081668802006",
       "$class": "mini-card",
-      "parentcomponent": "38060092009042888005205699030000",
-      "positioncomponent": "67100046100140698600400080690024"
+      "parentcomponent": "10800047400540269003108001428268",
+      "positioncomponent": "13100860180149418200606200369840"
     }), dabMain.createRawComponent(`h1`, {
       content: "`Reactive`",
-      parentComponent: "67100046100140698600400080690024",
-      positionComponent: "10176409239040078449878250976470",
+      parentComponent: "13100860180149418200606200369840",
+      positionComponent: "14900050120147889390740958887001",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`p`, {
       content: "`                            seleku kit menggunakan reaktivitas untuk melakukan update ui                        `",
-      parentComponent: "67100046100140698600400080690024",
-      positionComponent: "70846500710040038200160000650003",
+      parentComponent: "13100860180149418200606200369840",
+      positionComponent: "53159060374840029619126801800041",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), ...DCard({
-      "$id": "48905301105040049600180816000300",
+      "$id": "19907230100243008896192009065000",
       "$class": "mini-card",
-      "parentcomponent": "38060092009042888005205699030000",
-      "positioncomponent": "1150008068004890a200120630300045"
+      "parentcomponent": "10800047400540269003108001428268",
+      "positioncomponent": "7706099320014069b209190423097060"
     }), dabMain.createRawComponent(`h1`, {
       content: "`Web3`",
-      parentComponent: "1150008068004890a200120630300045",
-      positionComponent: "50369406107243078950600000300000",
+      parentComponent: "7706099320014069b209190423097060",
+      positionComponent: "45062143133048009099600745320633",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`p`, {
       content: "`                            fitur utama dari seleku kit adalah web3 frontend, membuat website desentralisasi dengan blockchain                        `",
-      parentComponent: "1150008068004890a200120630300045",
-      positionComponent: "19700060407045508600106080310035",
+      parentComponent: "7706099320014069b209190423097060",
+      positionComponent: "10000363350444409087018608800667",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), ...DCard({
-      "$id": "1500099999714088a500105280090000",
+      "$id": "4069482218004096a400102001015990",
       "$class": "mini-card",
-      "parentcomponent": "38060092009042888005205699030000",
-      "positioncomponent": "85070004140649009401020060053000"
+      "parentcomponent": "10800047400540269003108001428268",
+      "positioncomponent": "67801536106742008003500149372000"
     }), dabMain.createRawComponent(`h1`, {
       content: "`Metaverse`",
-      parentComponent: "85070004140649009401020060053000",
-      positionComponent: "6000009001734800a686620078544004",
+      parentComponent: "67801536106742008003500149372000",
+      positionComponent: "24005067133340359005502104000323",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`p`, {
       content: "`                            dukungan penuh dalam pengembangan pemrograman berbasis grafis pada web dan memungkinkan pengembangan metaverse                        `",
-      parentComponent: "85070004140649009401020060053000",
-      positionComponent: "10800502160048008502600409421011",
+      parentComponent: "67801536106742008003500149372000",
+      positionComponent: "72801557503641349204303267050550",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), ...DCard({
-      "$id": "13000526115040019262104001900340",
+      "$id": "9701400010304050b022102080800096",
       "$class": "powered",
-      "parentcomponent": "18300056101247089718100710130000",
-      "positioncomponent": "10384002907240078900835009902137"
+      "parentcomponent": "4020200211004506a208910009043000",
+      "positioncomponent": "34623711806844008007121004009862"
     }), dabMain.createRawComponent(`h1`, {
       content: "`Powered By EsBuild`",
-      parentComponent: "10384002907240078900835009902137",
-      positionComponent: "3109001014504300a080210000700664",
+      parentComponent: "34623711806844008007121004009862",
+      positionComponent: "80397000680746008013210000400781",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`p`, {
       content: "`                        seleku kit berjalan diatas esbuild, esbuild sebagai bundler dan memungkinkan developer untuk melakukan banyak hal yang menjadi keterbatasan antara node js dengan frontend                    `",
-      parentComponent: "10384002907240078900835009902137",
-      positionComponent: "8537400610204187a000806003007479",
+      parentComponent: "34623711806844008007121004009862",
+      positionComponent: "40420134180242058301101433501607",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), dabMain.createRawComponent(`div`, {
       content: "`                                                        `",
-      parentComponent: "18300056101247089718100710130000",
-      positionComponent: "2207000010014002b080009216300806",
+      parentComponent: "4020200211004506a208910009043000",
+      positionComponent: "96030080100840308004303456180400",
       state: {},
       event: {},
       attribute: {
@@ -2730,16 +2740,16 @@
       id: "a"
     }), dabMain.createRawComponent(`h1`, {
       content: "`Contributors`",
-      parentComponent: "2207000010014002b080009216300806",
-      positionComponent: "1226500040404470b190209426106000",
+      parentComponent: "96030080100840308004303456180400",
+      positionComponent: "4239294010934000a000170970505558",
       state: {},
       event: {},
       attribute: {},
       id: ""
     }), ...await AllContributor({
-      "$id": "1040004015944800b021660050605233",
-      "parentcomponent": "2207000010014002b080009216300806",
-      "positioncomponent": "19100500650040688200100772000001"
+      "$id": "24941701358040328134102734107080",
+      "parentcomponent": "96030080100840308004303456180400",
+      "positioncomponent": "6079670020734000a000115696500900"
     })];
   }
   async function allDocsEvent(content) {
@@ -2757,7 +2767,7 @@
           allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`details`, {
             content: "``",
             parentComponent: "",
-            positionComponent: "37072700802340008806111087074007",
+            positionComponent: "49200063137044908900246016605015",
             state: {},
             event: {},
             attribute: {
@@ -2766,8 +2776,8 @@
             id: ""
           }), dabMain.createRawComponent(`summary`, {
             content: "`${this.state.content}`",
-            parentComponent: "37072700802340008806111087074007",
-            positionComponent: "79371035195040308328860500443502",
+            parentComponent: "49200063137044908900246016605015",
+            positionComponent: "8170053710084021b016333030005115",
             state: {
               content: x.textContent
             },
@@ -2787,7 +2797,7 @@
           allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`details`, {
             content: "``",
             parentComponent: "",
-            positionComponent: "97067111274044009900351747000003",
+            positionComponent: "72000007114040009492106038004507",
             state: {},
             event: {},
             attribute: {
@@ -2796,8 +2806,8 @@
             id: ""
           }), dabMain.createRawComponent(`summary`, {
             content: "`${this.state.content}`",
-            parentComponent: "97067111274044009900351747000003",
-            positionComponent: "9400133810404000b600180401037000",
+            parentComponent: "72000007114040009492106038004507",
+            positionComponent: "1091160009204031b020100800200040",
             state: {
               content: x.textContent
             },
@@ -2819,7 +2829,7 @@
           allShortName[x.textContent.replace(/\s/igm, "")] = Render([dabMain.createRawComponent(`summary`, {
             content: "`${this.state.content}`",
             parentComponent: "",
-            positionComponent: "17930853135041438250450090001190",
+            positionComponent: "24005807030040659890806160748600",
             state: {
               content: x.textContent
             },
@@ -2846,7 +2856,7 @@
     Render([dabMain.createRawComponent(`button`, {
       content: "``",
       parentComponent: "",
-      positionComponent: "70506073078048508077800070034410",
+      positionComponent: "1086900460944011a010148007003006",
       state: {},
       event: {
         onclick: () => {
@@ -2859,8 +2869,8 @@
       id: ""
     }), dabMain.createRawComponent(`i`, {
       content: "``",
-      parentComponent: "70506073078048508077800070034410",
-      positionComponent: "10045200815840308703139002100001",
+      parentComponent: "1086900460944011a010148007003006",
+      positionComponent: "10864400620040008006504400000009",
       state: {},
       event: {},
       attribute: {
@@ -2871,10 +2881,10 @@
   }
   async function main() {
     Router.route({
-      "$id": "25109000139140438749780000090201",
+      "$id": "31188208700648858588120763600404",
       "path": "/",
       "component": await MainContent({
-        "$id": "22096470100040068105100785008303"
+        "$id": "8041535089084000a580100933020500"
       }),
       "target": () => {
         return document.body;
@@ -2886,10 +2896,10 @@
   }
   main();
   Router.route({
-    "$id": "1305051210014078a600104008400037",
+    "$id": "21640518403340058090102002707050",
     "path": "/docs",
     "component": Docs({
-      "$id": "03000450000848308305100128388167"
+      "$id": "63170439101643828009070404111204"
     }),
     "target": () => {
       return document.body;
@@ -2899,10 +2909,10 @@
     }
   });
   Router.route({
-    "$id": "9674900054344030b002100000024079",
+    "$id": "11309680808740598200100002801117",
     "path": "/api",
     "component": Api({
-      "$id": "19569904144042008100000008060300"
+      "$id": "8008802616004006b923503003640014"
     }),
     "target": () => {
       return document.body;
@@ -2912,10 +2922,10 @@
     }
   });
   Router.route({
-    "$id": "15152305100144098000925479450000",
+    "$id": "10458591800740058388100955041937",
     "path": "/config",
     "component": Config({
-      "$id": "19510008454846748009604460004292"
+      "$id": "10008000529047408450902609730080"
     }),
     "target": () => {
       return document.body;
