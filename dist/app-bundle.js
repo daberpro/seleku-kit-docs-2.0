@@ -95,7 +95,7 @@ kemudian anda akan di minta untuk memasukan nama project baru yang akan anda bua
 setelah anda membuat template project silahkan jalankan terminal atau command prompt anda di dalam folder\r
 project yang telah anda buat dengan mengetikan \`npm i\` kemudian anda jalankan \`npm run dev\` untuk menjalankan seleku-kit di mode development dan anda akan melihat bahwa seleku berjalan di lokal komputer anda dengan port default bawaan\r
 \r
-silahkan buka di web browser anda \`localhost:3000\` dan untuk melihat perubahan silahkan anda edit file\r
+silahkan buka di web browser anda dan untuk melihat perubahan silahkan anda edit file\r
 \`main.selek\`\r
 \r
 # # Sintaks Dasar\r
